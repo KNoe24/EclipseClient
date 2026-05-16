@@ -9,6 +9,7 @@ let detectedTotalMemoryGb = DEFAULT_MEMORY_TOTAL_GB;
 let launchProgressTimer = null;
 let clientUpdateProgressValue = 0;
 let playerHeadRefreshToken = Date.now();
+let wrongJavaVersionCrashDetected = false;
 
 let skinEditorViewer = null;
 let currentSkinViewer = null;
@@ -3161,6 +3162,17 @@ function bumpClientUpdateProgress() {
   setClientUpdateOverlayProgress(clientUpdateProgressValue);
 }
 
+function isWrongJavaVersionCrashLine(line) {
+  const text = String(line || "");
+
+  return (
+    text.includes("ClassLoaders$AppClassLoader cannot be cast to class java.net.URLClassLoader") ||
+    text.includes("UnsupportedClassVersionError") ||
+    text.includes("has been compiled by a more recent version of the Java Runtime") ||
+    text.includes("Unsupported major.minor version")
+  );
+}
+
 async function initEvents() {
   injectDynamicStyles();
   ensureEditorExtraControls();
@@ -3462,7 +3474,7 @@ async function initEvents() {
             showPage("console");
           }, 650);
         }
-
+wrongJavaVersionCrashDetected = false;
         const result = await window.launcherAPI.launcher.launch(selectedProfile.id);
 
         finishLaunchProgress();
@@ -3607,13 +3619,25 @@ async function initEvents() {
 
   window.launcherAPI.events.onGameLog(line => {
     appendConsole(line);
+
+    if (isWrongJavaVersionCrashLine(line)) {
+      wrongJavaVersionCrashDetected = true;
+    }
   });
 
   window.launcherAPI.events.onGameClose(data => {
     setStatus(`Minecraft closed with code ${data.code}.`);
     appendConsole(`[launcher] Minecraft closed with code ${data.code}.`);
+
+    if (Number(data.code) !== 0 && wrongJavaVersionCrashDetected) {
+      wrongJavaVersionCrashDetected = false;
+
+      alert("Wrong Java version was used. Change it in Installations.");
+      setStatus("Wrong Java version was used. Change it in Installations.");
+    }
+
     loadDiscordStatus();
-  });
+});
 
   window.launcherAPI.events.onUpdaterStatus(data => {
     const downloadBtn = $("#downloadUpdateBtn");
