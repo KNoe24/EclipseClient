@@ -1,9 +1,16 @@
 const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
+const https = require("https");
+const { URL } = require("url");
 const storage = require("./storage");
 
 const PROFILES_FILE = "profiles.json";
+const MINECRAFT_VERSION_MANIFEST_URL = "https://launchermeta.mojang.com/mc/game/version_manifest_v2.json";
+const MINECRAFT_VERSION_MANIFEST_CACHE_MS = 5 * 60 * 1000;
+
+let minecraftVersionManifestCache = null;
+let minecraftVersionManifestCacheAt = 0;
 
 const DEFAULT_INSTALLATION_ICON_IDS = [
   "grass",
@@ -253,6 +260,112 @@ async function importProfileIcon(sourcePath) {
     iconPath: targetPath,
     customIconDataUrl: iconDataUrlFor(targetPath)
   };
+}
+
+function requestJson(urlString) {
+  return new Promise((resolve, reject) => {
+    let parsedUrl;
+
+    try {
+      parsedUrl = new URL(urlString);
+    } catch {
+      reject(new Error("Invalid version manifest URL."));
+      return;
+    }
+
+    if (parsedUrl.protocol !== "https:") {
+      reject(new Error("Only HTTPS version manifests are allowed."));
+      return;
+    }
+
+    const request = https.get(
+      parsedUrl,
+      {
+        headers: {
+          Accept: "application/json",
+          "User-Agent": "eclipse-client/1.0"
+        }
+      },
+      response => {
+        const statusCode = response.statusCode || 0;
+
+        if (
+          statusCode >= 300 &&
+          statusCode < 400 &&
+          response.headers.location
+        ) {
+          response.resume();
+          const redirectUrl = new URL(response.headers.location, parsedUrl);
+          requestJson(redirectUrl.toString()).then(resolve).catch(reject);
+          return;
+        }
+
+        if (statusCode < 200 || statusCode >= 300) {
+          response.resume();
+          reject(new Error(`Version manifest request failed with HTTP ${statusCode}.`));
+          return;
+        }
+
+        const chunks = [];
+
+        response.on("data", chunk => {
+          chunks.push(chunk);
+        });
+
+        response.on("end", () => {
+          try {
+            resolve(JSON.parse(Buffer.concat(chunks).toString("utf8")));
+          } catch {
+            reject(new Error("Version manifest returned invalid JSON."));
+          }
+        });
+      }
+    );
+
+    request.on("error", reject);
+    request.setTimeout(30000, () => {
+      request.destroy(new Error("Version manifest request timed out."));
+    });
+  });
+}
+
+async function fetchOfficialMinecraftVersionManifest() {
+  const now = Date.now();
+
+  if (
+    minecraftVersionManifestCache &&
+    now - minecraftVersionManifestCacheAt < MINECRAFT_VERSION_MANIFEST_CACHE_MS
+  ) {
+    return minecraftVersionManifestCache;
+  }
+
+  const manifest = await requestJson(MINECRAFT_VERSION_MANIFEST_URL);
+
+  minecraftVersionManifestCache = manifest;
+  minecraftVersionManifestCacheAt = now;
+
+  return manifest;
+}
+
+async function listMinecraftVersions(options = {}) {
+  const includeSnapshots = Boolean(options.includeSnapshots);
+  const manifest = await fetchOfficialMinecraftVersionManifest();
+  const versions = Array.isArray(manifest?.versions) ? manifest.versions : [];
+
+  return versions
+    .filter(version => {
+      if (version?.type === "release") return true;
+      if (includeSnapshots && version?.type === "snapshot") return true;
+      return false;
+    })
+    .map(version => ({
+      id: String(version.id || ""),
+      type: version.type === "snapshot" ? "snapshot" : "release",
+      url: String(version.url || ""),
+      time: String(version.time || ""),
+      releaseTime: String(version.releaseTime || "")
+    }))
+    .filter(version => version.id);
 }
 
 function guessLoaderFromVersionJson(idValue, json) {
@@ -601,5 +714,6 @@ module.exports = {
   getProfileById,
   importProfileIcon,
   listInstalledVersions,
+  listMinecraftVersions,
   DEFAULT_INSTALLATION_ICON_IDS
 };

@@ -999,6 +999,10 @@ app.whenReady().then(async () => {
     return profileService.listInstalledVersions();
   });
 
+  ipcMain.handle("profiles:listMinecraftVersions", async (_event, options = {}) => {
+    return profileService.listMinecraftVersions(options);
+  });
+
   ipcMain.handle("profiles:pickGameDir", async () => {
     const result = await dialog.showOpenDialog(mainWindow, {
       title: "Choose game folder",

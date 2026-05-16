@@ -50,6 +50,7 @@ const state = {
   currentPage: "home",
   dropupOpen: false,
   installedVersions: [],
+  minecraftVersions: [],
   javaInstallations: [],
   installationBackdropMouseDownOnBackdrop: false,
   installationEditor: {
@@ -488,14 +489,43 @@ async function loadDiscordStatus() {
 async function loadInstalledVersions() {
   try {
     state.installedVersions = await window.launcherAPI.profiles.listInstalledVersions();
-    populateEditorInstalledVersionSelect();
+    populateEditorMinecraftVersionSelect();
     return state.installedVersions;
   } catch (error) {
     appendConsole(`[versions error] Failed to load installed versions: ${error.message || error}`);
     state.installedVersions = [];
-    populateEditorInstalledVersionSelect();
+    populateEditorMinecraftVersionSelect();
     return [];
   }
+}
+
+async function loadMinecraftVersions() {
+  try {
+    if (!window.launcherAPI.profiles.listMinecraftVersions) {
+      throw new Error("The preload API does not expose profiles.listMinecraftVersions.");
+    }
+
+    state.minecraftVersions = await window.launcherAPI.profiles.listMinecraftVersions({
+      includeSnapshots: true
+    });
+
+    populateEditorMinecraftVersionSelect();
+    return state.minecraftVersions;
+  } catch (error) {
+    appendConsole(`[versions error] Failed to load Minecraft versions: ${error.message || error}`);
+    state.minecraftVersions = [];
+    populateEditorMinecraftVersionSelect();
+    return [];
+  }
+}
+
+async function loadEditorVersionData() {
+  await Promise.all([
+    loadInstalledVersions(),
+    loadMinecraftVersions()
+  ]);
+
+  populateEditorMinecraftVersionSelect();
 }
 
 async function loadJavaInstallations() {
@@ -1012,16 +1042,13 @@ function ensureEditorExtraControls() {
   versionLabel.id = "editorExtraControlsInstalled";
   versionLabel.className = "editor-extra-wide";
   versionLabel.innerHTML = `
-    <span class="whitetext mcr">Installed Version</span>
+    <span class="whitetext mcr">Version List</span>
     <div class="editor-control-row">
-      <select id="editorInstalledVersionSelect" class="editor-input grow-input">
-        <option value="">Manual / not installed in shared versions folder</option>
-      </select>
-      <button id="refreshInstalledVersionsBtn" class="mcbtn editor-small-btn" type="button">Refresh</button>
+      <button id="refreshInstalledVersionsBtn" class="mcbtn editor-small-btn" type="button">Refresh Versions</button>
+      <span id="editorInstalledVersionHelp" class="editor-help-text mcr">
+        Vanilla versions come from Mojang and can be downloaded on launch. Loader builds come from downloaded version JSONs.
+      </span>
     </div>
-    <span id="editorInstalledVersionHelp" class="editor-help-text mcr">
-      Versions are read from the shared launcher versions folder. Fabric/Forge JSONs placed there can be selected here.
-    </span>
   `;
 
   const customJsonTools = document.createElement("label");
@@ -1068,7 +1095,7 @@ function openInstallationEditor(profileId) {
 
   setEditorModrinthUpdateStatus("");
 
-  loadInstalledVersions();
+  loadEditorVersionData();
   loadJavaInstallations();
 }
 
@@ -1131,49 +1158,254 @@ function updateEditorIconPreview() {
   preview.appendChild(img);
 }
 
-function populateEditorInstalledVersionSelect() {
-  const select = $("#editorInstalledVersionSelect");
+function normalizeLoaderType(value) {
+  return String(value || "vanilla").trim().toLowerCase() || "vanilla";
+}
+
+function getOfficialVersionInfo(versionId) {
+  const id = String(versionId || "");
+  return state.minecraftVersions.find(version => version.id === id) || null;
+}
+
+function getInstalledVersionType(version) {
+  const official = getOfficialVersionInfo(version?.baseVersion || version?.id);
+
+  if (official?.type) {
+    return official.type;
+  }
+
+  return version?.type === "snapshot" ? "snapshot" : "release";
+}
+
+function getEditorSelectedLoader() {
+  return normalizeLoaderType(
+    $("#editorSettingLoader")?.value || getEditorProfile()?.loaderType || "vanilla"
+  );
+}
+
+function getEditorShowSnapshots() {
+  return Boolean($("#editorShowSnapshots")?.checked);
+}
+
+function getCurrentEditorMinecraftVersionValue() {
+  const select = $("#editorSettingMcVersion");
+  const profile = getEditorProfile();
+
+  return (
+    select?.dataset.selectedMinecraftVersion ||
+    profile?.minecraftVersion ||
+    select?.value ||
+    "1.21.1"
+  );
+}
+
+function addEditorVersionOption(select, {
+  value,
+  label,
+  minecraftVersion,
+  versionType = "release",
+  loaderType = "vanilla",
+  customVersionId = "",
+  selected = false
+}) {
+  const option = document.createElement("option");
+
+  option.value = value;
+  option.textContent = label;
+  option.dataset.minecraftVersion = minecraftVersion;
+  option.dataset.versionType = versionType;
+  option.dataset.loaderType = loaderType;
+  option.dataset.customVersionId = customVersionId;
+  option.selected = selected;
+
+  select.appendChild(option);
+}
+
+function addEditorEmptyVersionOption(select, text) {
+  const option = document.createElement("option");
+  option.value = "";
+  option.textContent = text;
+  option.disabled = true;
+  option.selected = true;
+  select.appendChild(option);
+}
+
+function populateEditorMinecraftVersionSelect() {
+  const select = $("#editorSettingMcVersion");
   if (!select) return;
 
   const profile = getEditorProfile();
-  const currentValue = profile?.customVersionId || profile?.minecraftVersion || "";
+  const loader = getEditorSelectedLoader();
+  const showSnapshots = getEditorShowSnapshots();
+  const currentMinecraftVersion = getCurrentEditorMinecraftVersionValue();
+  const customVersionIdInput = $("#editorSettingCustomVersionId");
+  const currentCustomVersionId = customVersionIdInput?.value || profile?.customVersionId || "";
 
-  select.innerHTML = `<option value="">Manual / not installed in shared versions folder</option>`;
+  select.innerHTML = "";
 
-  for (const version of state.installedVersions) {
-    const option = document.createElement("option");
-    option.value = version.id;
-    option.textContent = `${version.id}${version.inheritsFrom ? ` → ${version.inheritsFrom}` : ""}${version.loaderType && version.loaderType !== "vanilla" ? ` (${version.loaderType})` : ""}`;
-    option.selected = version.id === currentValue;
-    select.appendChild(option);
+  let hasSelectedOption = false;
+
+  if (loader === "vanilla") {
+    const versions = state.minecraftVersions.filter(version => {
+      if (version.type === "release") return true;
+      return showSnapshots && version.type === "snapshot";
+    });
+
+    for (const version of versions) {
+      const selected =
+        !currentCustomVersionId &&
+        version.id === currentMinecraftVersion;
+
+      hasSelectedOption = hasSelectedOption || selected;
+
+      addEditorVersionOption(select, {
+        value: version.id,
+        label: version.type === "snapshot" ? `${version.id} (snapshot)` : version.id,
+        minecraftVersion: version.id,
+        versionType: version.type,
+        loaderType: "vanilla",
+        customVersionId: "",
+        selected
+      });
+    }
+
+    if (currentMinecraftVersion && !versions.some(version => version.id === currentMinecraftVersion)) {
+      addEditorVersionOption(select, {
+        value: currentMinecraftVersion,
+        label: `${currentMinecraftVersion} (current / not in list)`,
+        minecraftVersion: currentMinecraftVersion,
+        versionType: $("#editorSettingVersionType")?.value || profile?.versionType || "release",
+        loaderType: "vanilla",
+        customVersionId: "",
+        selected: true
+      });
+
+      hasSelectedOption = true;
+    }
+
+    if (versions.length === 0 && !hasSelectedOption) {
+      addEditorVersionOption(select, {
+        value: "1.21.1",
+        label: "1.21.1 (fallback)",
+        minecraftVersion: "1.21.1",
+        versionType: "release",
+        loaderType: "vanilla",
+        customVersionId: "",
+        selected: true
+      });
+
+      hasSelectedOption = true;
+    }
+  } else {
+    const versions = state.installedVersions.filter(version => {
+      const versionLoader = normalizeLoaderType(version.loaderType);
+      const versionType = getInstalledVersionType(version);
+
+      if (versionLoader !== loader) return false;
+      if (versionType === "snapshot" && !showSnapshots) return false;
+
+      return true;
+    });
+
+    for (const version of versions) {
+      const baseVersion = version.baseVersion || version.inheritsFrom || version.id;
+      const versionType = getInstalledVersionType(version);
+      const selected =
+        version.id === currentCustomVersionId ||
+        (!currentCustomVersionId && baseVersion === currentMinecraftVersion);
+
+      hasSelectedOption = hasSelectedOption || selected;
+
+      addEditorVersionOption(select, {
+        value: version.id,
+        label: `${baseVersion} · ${version.id}${versionType === "snapshot" ? " (snapshot)" : ""}`,
+        minecraftVersion: baseVersion,
+        versionType,
+        loaderType: version.loaderType || loader,
+        customVersionId: version.isVanilla ? "" : version.id,
+        selected
+      });
+    }
+
+    if (currentCustomVersionId && !versions.some(version => version.id === currentCustomVersionId)) {
+      addEditorVersionOption(select, {
+        value: currentCustomVersionId,
+        label: `${currentMinecraftVersion} · ${currentCustomVersionId} (current / not in list)`,
+        minecraftVersion: currentMinecraftVersion,
+        versionType: $("#editorSettingVersionType")?.value || profile?.versionType || "release",
+        loaderType: loader,
+        customVersionId: currentCustomVersionId,
+        selected: true
+      });
+
+      hasSelectedOption = true;
+    }
+
+    if (versions.length === 0 && !hasSelectedOption) {
+      addEditorEmptyVersionOption(
+        select,
+        `No downloaded ${loader} builds found${showSnapshots ? "" : " (enable snapshots to include snapshot builds)"}`
+      );
+    }
   }
 
-  if (currentValue && !state.installedVersions.some(version => version.id === currentValue)) {
-    select.value = "";
+  if (!hasSelectedOption && select.options.length > 0 && !select.options[0].disabled) {
+    select.options[0].selected = true;
+  }
+
+  applyEditorMinecraftVersionSelection();
+}
+
+function getEditorMinecraftVersionSelection() {
+  const select = $("#editorSettingMcVersion");
+  const selectedOption = select?.selectedOptions?.[0] || null;
+
+  if (selectedOption && !selectedOption.disabled) {
+    return {
+      minecraftVersion: selectedOption.dataset.minecraftVersion || selectedOption.value || "1.21.1",
+      versionType: selectedOption.dataset.versionType || "release",
+      loaderType: selectedOption.dataset.loaderType || getEditorSelectedLoader(),
+      customVersionId: selectedOption.dataset.customVersionId || ""
+    };
+  }
+
+  return {
+    minecraftVersion: select?.dataset.selectedMinecraftVersion || select?.value || getEditorProfile()?.minecraftVersion || "1.21.1",
+    versionType: $("#editorSettingVersionType")?.value || getEditorProfile()?.versionType || "release",
+    loaderType: getEditorSelectedLoader(),
+    customVersionId: $("#editorSettingCustomVersionId")?.value.trim() || getEditorProfile()?.customVersionId || ""
+  };
+}
+
+function applyEditorMinecraftVersionSelection() {
+  const selection = getEditorMinecraftVersionSelection();
+  const select = $("#editorSettingMcVersion");
+  const versionType = $("#editorSettingVersionType");
+  const customVersionId = $("#editorSettingCustomVersionId");
+
+  if (select) {
+    select.dataset.selectedMinecraftVersion = selection.minecraftVersion;
+  }
+
+  if (versionType) {
+    versionType.value = selection.versionType;
+  }
+
+  if (customVersionId) {
+    customVersionId.value = selection.customVersionId;
   }
 }
 
+function populateEditorInstalledVersionSelect() {
+  populateEditorMinecraftVersionSelect();
+}
+
 function applyInstalledVersionSelection(versionId) {
-  if (!versionId) return;
+  const select = $("#editorSettingMcVersion");
+  if (!select) return;
 
-  const version = state.installedVersions.find(item => item.id === versionId);
-  if (!version) return;
-
-  const mcVersion = $("#editorSettingMcVersion");
-  const versionType = $("#editorSettingVersionType");
-  const loader = $("#editorSettingLoader");
-  const customVersionId = $("#editorSettingCustomVersionId");
-
-  if (mcVersion) mcVersion.value = version.baseVersion || version.id;
-  if (versionType) versionType.value = version.type || "release";
-
-  if (customVersionId) {
-    customVersionId.value = version.isVanilla ? "" : version.id;
-  }
-
-  if (loader && version.loaderType) {
-    loader.value = version.loaderType;
-  }
+  select.value = versionId;
+  applyEditorMinecraftVersionSelection();
 }
 
 function populateEditorJavaSelect() {
@@ -1229,7 +1461,19 @@ function fillEditorSettings() {
 
   for (const [selector, value] of Object.entries(fields)) {
     const element = $(selector);
-    if (element) element.value = value;
+
+    if (element) {
+      element.value = value;
+
+      if (selector === "#editorSettingMcVersion") {
+        element.dataset.selectedMinecraftVersion = value;
+      }
+    }
+  }
+
+  const showSnapshots = $("#editorShowSnapshots");
+  if (showSnapshots) {
+    showSnapshots.checked = profile.versionType === "snapshot";
   }
 
   const iconPathInput = $("#editorSettingIconPath");
@@ -1246,12 +1490,14 @@ function fillEditorSettings() {
   fillEditorMemorySliders(profile);
 }
 function getEditorSettingsPatch() {
+  const versionSelection = getEditorMinecraftVersionSelection();
+
   return {
     name: $("#editorSettingName")?.value.trim() || "Installation",
-    minecraftVersion: $("#editorSettingMcVersion")?.value.trim() || "1.21.1",
-    versionType: $("#editorSettingVersionType")?.value || "release",
-    loaderType: $("#editorSettingLoader")?.value || "vanilla",
-    customVersionId: $("#editorSettingCustomVersionId")?.value.trim() || "",
+    minecraftVersion: versionSelection.minecraftVersion || "1.21.1",
+    versionType: versionSelection.versionType || $("#editorSettingVersionType")?.value || "release",
+    loaderType: $("#editorSettingLoader")?.value || versionSelection.loaderType || "vanilla",
+    customVersionId: versionSelection.customVersionId || $("#editorSettingCustomVersionId")?.value.trim() || "",
     customVersionJsonPath: $("#editorSettingCustomJson")?.value.trim() || "",
     gameDir: $("#editorSettingGameDir")?.value.trim() || "",
     javaPath: $("#editorSettingJavaPath")?.value.trim() || "",
@@ -3043,6 +3289,25 @@ async function initEvents() {
     });
   }
 
+  const editorSettingMcVersion = $("#editorSettingMcVersion");
+  if (editorSettingMcVersion) {
+    editorSettingMcVersion.addEventListener("change", applyEditorMinecraftVersionSelection);
+  }
+
+  const editorSettingLoader = $("#editorSettingLoader");
+  if (editorSettingLoader) {
+    editorSettingLoader.addEventListener("change", () => {
+      populateEditorMinecraftVersionSelect();
+    });
+  }
+
+  const editorShowSnapshots = $("#editorShowSnapshots");
+  if (editorShowSnapshots) {
+    editorShowSnapshots.addEventListener("change", () => {
+      populateEditorMinecraftVersionSelect();
+    });
+  }
+
   const editorInstalledVersionSelect = $("#editorInstalledVersionSelect");
   if (editorInstalledVersionSelect) {
     editorInstalledVersionSelect.addEventListener("change", () => {
@@ -3052,7 +3317,7 @@ async function initEvents() {
 
   const refreshInstalledVersionsBtn = $("#refreshInstalledVersionsBtn");
   if (refreshInstalledVersionsBtn) {
-    refreshInstalledVersionsBtn.addEventListener("click", loadInstalledVersions);
+    refreshInstalledVersionsBtn.addEventListener("click", loadEditorVersionData);
   }
 
   const editorJavaSelect = $("#editorJavaSelect");
@@ -3213,9 +3478,11 @@ async function initEvents() {
   const newProfileBtn = $("#newProfileBtn");
   if (newProfileBtn) {
     newProfileBtn.addEventListener("click", async () => {
+      const latestRelease = state.minecraftVersions.find(version => version.type === "release")?.id || "1.21.1";
+
       const created = await window.launcherAPI.profiles.create({
         name: "New Custom Installation",
-        minecraftVersion: "1.21.1",
+        minecraftVersion: latestRelease,
         versionType: "release",
         loaderType: "vanilla",
         minMemory: "2G",
@@ -3431,7 +3698,7 @@ async function initEvents() {
       }
 
       loadProfiles();
-      loadInstalledVersions();
+      loadEditorVersionData();
       loadDiscordStatus();
       return;
     }
@@ -3452,7 +3719,7 @@ async function boot() {
   await loadAccount();
   await loadProfiles();
   await loadDiscordStatus();
-  await loadInstalledVersions();
+  await loadEditorVersionData();
 
   loadJavaInstallations();
 

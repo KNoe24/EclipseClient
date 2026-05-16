@@ -27,6 +27,7 @@ contextBridge.exposeInMainWorld("launcherAPI", {
     setSelected: id => ipcRenderer.invoke("profiles:setSelected", id),
     getSelected: () => ipcRenderer.invoke("profiles:getSelected"),
     listInstalledVersions: () => ipcRenderer.invoke("profiles:listInstalledVersions"),
+    listMinecraftVersions: options => ipcRenderer.invoke("profiles:listMinecraftVersions", options),
     pickGameDir: () => ipcRenderer.invoke("profiles:pickGameDir"),
     pickJava: () => ipcRenderer.invoke("profiles:pickJava"),
     pickCustomVersionJson: () => ipcRenderer.invoke("profiles:pickCustomVersionJson"),
