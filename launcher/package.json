@@ -13,8 +13,8 @@
     "build:mac": "electron-builder --mac dmg",
     "build:linux": "electron-builder --linux AppImage",
     "dist": "electron-builder",
-    "push": "node scripts/git-push.js",
-    "push:start": "node scripts/git-push.js --start"
+    "push": "node scripts/git-push.js --start",
+    "push:single": "node scripts/git-push.js"
   },
   "dependencies": {
     "discord-rpc": "4.0.1",
