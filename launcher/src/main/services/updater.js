@@ -27,11 +27,6 @@ function sendToAppConsole(message) {
 
   if (!mainWindow || mainWindow.isDestroyed()) return;
 
-  /*
-    This sends the message to your app's Console tab,
-    because your preload already exposes:
-    window.launcherAPI.events.onGameLog(...)
-  */
   mainWindow.webContents.send("game:log", message);
 }
 
