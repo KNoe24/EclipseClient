@@ -12,8 +12,8 @@ let retryTimer = null;
 function isConfigured() {
   return Boolean(
     DISCORD_CLIENT_ID &&
-      DISCORD_CLIENT_ID !== "YOUR_DISCORD_CLIENT_ID" &&
-      DISCORD_CLIENT_ID.trim().length > 0
+    DISCORD_CLIENT_ID !== "YOUR_DISCORD_CLIENT_ID" &&
+    DISCORD_CLIENT_ID.trim().length > 0
   );
 }
 
@@ -21,7 +21,7 @@ function getStatus() {
   return {
     configured: isConfigured(),
     connected,
-    connecting
+    connecting,
   };
 }
 
@@ -58,25 +58,27 @@ async function safeDestroyClient(client) {
 
 async function init() {
   if (!isConfigured()) {
-    console.log("[discord] Discord Rich Presence disabled. Set DISCORD_CLIENT_ID in src/main/services/discord.js.");
+    console.log(
+      "[discord] Discord Rich Presence disabled. Set DISCORD_CLIENT_ID in src/main/services/discord.js."
+    );
 
     return {
       ok: false,
       disabled: true,
-      reason: "Discord client ID is not configured."
+      reason: "Discord client ID is not configured.",
     };
   }
 
   if (connected) {
     return {
-      ok: true
+      ok: true,
     };
   }
 
   if (connecting) {
     return {
       ok: false,
-      connecting: true
+      connecting: true,
     };
   }
 
@@ -87,7 +89,7 @@ async function init() {
     RPC.register(DISCORD_CLIENT_ID);
 
     const client = new RPC.Client({
-      transport: "ipc"
+      transport: "ipc",
     });
 
     rpc = client;
@@ -99,11 +101,11 @@ async function init() {
       console.log("[discord] Rich Presence connected.");
 
       if (lastActivity) {
-        setActivity(lastActivity).catch(error => {
+        setActivity(lastActivity).catch((error) => {
           console.warn("[discord] Failed to restore activity:", error.message || error);
         });
       } else {
-        setLauncherActivity().catch(error => {
+        setLauncherActivity().catch((error) => {
           console.warn("[discord] Failed to set launcher activity:", error.message || error);
         });
       }
@@ -118,7 +120,7 @@ async function init() {
       scheduleReconnect();
     });
 
-    client.on("error", error => {
+    client.on("error", (error) => {
       connected = false;
       connecting = false;
 
@@ -127,13 +129,13 @@ async function init() {
     });
 
     await client.login({
-      clientId: DISCORD_CLIENT_ID
+      clientId: DISCORD_CLIENT_ID,
     });
 
     connecting = false;
 
     return {
-      ok: true
+      ok: true,
     };
   } catch (error) {
     connected = false;
@@ -148,7 +150,7 @@ async function init() {
 
     return {
       ok: false,
-      error: error.message || String(error)
+      error: error.message || String(error),
     };
   }
 }
@@ -161,7 +163,7 @@ async function setActivity(activity) {
 
     return {
       ok: false,
-      connected: false
+      connected: false,
     };
   }
 
@@ -169,11 +171,11 @@ async function setActivity(activity) {
     await rpc.setActivity({
       ...activity,
       startTimestamp: activity.startTimestamp || startedAt,
-      instance: false
+      instance: false,
     });
 
     return {
-      ok: true
+      ok: true,
     };
   } catch (error) {
     connected = false;
@@ -183,7 +185,7 @@ async function setActivity(activity) {
 
     return {
       ok: false,
-      error: error.message || String(error)
+      error: error.message || String(error),
     };
   }
 }
@@ -195,7 +197,7 @@ async function setLauncherActivity(profileName = "No installation selected") {
     largeImageKey: "knoe24_avatar_drops",
     largeImageText: "Eclipse Client",
     smallImageKey: "minecraft",
-    smallImageText: "Minecraft"
+    smallImageText: "Minecraft",
   });
 }
 
@@ -208,7 +210,7 @@ async function setPlayingActivity(profileName, versionId) {
     largeImageKey: "knoe24_avatar_drops",
     largeImageText: "Eclipse Client",
     smallImageKey: "minecraft",
-    smallImageText: "Minecraft"
+    smallImageText: "Minecraft",
   });
 }
 
@@ -219,7 +221,7 @@ async function setUpdatingActivity() {
     largeImageKey: "knoe24_avatar_drops",
     largeImageText: "Eclipse Client",
     smallImageKey: "minecraft",
-    smallImageText: "Minecraft"
+    smallImageText: "Minecraft",
   });
 }
 
@@ -227,7 +229,7 @@ async function clear() {
   if (!rpc || !connected) {
     return {
       ok: false,
-      connected: false
+      connected: false,
     };
   }
 
@@ -235,7 +237,7 @@ async function clear() {
     await rpc.clearActivity();
 
     return {
-      ok: true
+      ok: true,
     };
   } catch (error) {
     connected = false;
@@ -243,7 +245,7 @@ async function clear() {
 
     return {
       ok: false,
-      error: error.message || String(error)
+      error: error.message || String(error),
     };
   }
 }
@@ -267,5 +269,5 @@ module.exports = {
   setUpdatingActivity,
   clear,
   destroy,
-  getStatus
+  getStatus,
 };

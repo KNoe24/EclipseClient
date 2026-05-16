@@ -14,6 +14,7 @@ Client/game updates update the custom Minecraft client version: custom version J
 Launcher updates are handled by `electron-updater`.
 
 Use this for:
+
 - launcher UI changes
 - JavaScript/Electron code changes
 - CSS changes
@@ -23,6 +24,7 @@ Use this for:
 - auth flow changes
 
 Do not use this for:
+
 - changing the custom Minecraft client version
 - changing default client mods
 - changing default client configs

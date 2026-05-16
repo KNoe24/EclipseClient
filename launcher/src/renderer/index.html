@@ -1,615 +1,644 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-  <meta charset="UTF-8" />
-<meta
-  http-equiv="Content-Security-Policy"
-  content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://api.mineatar.io https://textures.minecraft.net; connect-src 'self' https://api.mcsrvstat.us; frame-src https://www.minecraft.net https://launcher.wawe.cc https://wawe.cc; child-src https://www.minecraft.net https://launcher.wawe.cc https://wawe.cc;"
-/>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Eclipse Client</title>
-  <link rel="stylesheet" href="./newstyles.css" />
-</head>
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://api.mineatar.io https://textures.minecraft.net; connect-src 'self' https://api.mcsrvstat.us; frame-src https://www.minecraft.net https://launcher.wawe.cc https://wawe.cc; child-src https://www.minecraft.net https://launcher.wawe.cc https://wawe.cc;"
+    />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Eclipse Client</title>
+    <link rel="stylesheet" href="./newstyles.css" />
+  </head>
 
-<body>
-  <div id="titlebar">
-  <span class="title whitetext mct">Eclipse Launcher</span>
-</div>
-  <div class="app">
-    <aside class="sidebar">
-      <div class="account-box">
-        <div class="account-header">
-          <img
-            id="playerHead"
-            class="player-head"
-            src="./static/img/default_logged_out_head.png"
-            alt="Player head"
-          />
+  <body>
+    <div id="titlebar">
+      <span class="title whitetext mct">Eclipse Launcher</span>
+    </div>
+    <div class="app">
+      <aside class="sidebar">
+        <div class="account-box">
+          <div class="account-header">
+            <img
+              id="playerHead"
+              class="player-head"
+              src="./static/img/default_logged_out_head.png"
+              alt="Player head"
+            />
 
-          <div>
-            <div id="accountName" class="mct whitetext">Not logged in</div>
-            <div id="accountSubtext" class="account-subtext mct">Microsoft account</div>
+            <div>
+              <div id="accountName" class="mct whitetext">Not logged in</div>
+              <div id="accountSubtext" class="account-subtext mct">Microsoft account</div>
+            </div>
           </div>
+
+          <button id="loginBtn" class="mcbtn">Login with Microsoft</button>
+          <button id="logoutBtn" class="secondary hidden mcbtn">Logout</button>
         </div>
 
-        <button id="loginBtn" class="mcbtn">Login with Microsoft</button>
-        <button id="logoutBtn" class="secondary hidden mcbtn">Logout</button>
-      </div>
+        <nav class="nav">
+          <button class="nav-btn active mcbtn" data-page="home">
+            <img class="nav-icon" src="./static/img/home.svg" alt="" />
+            <span>Home</span>
+          </button>
 
-      <nav class="nav">
-        <button class="nav-btn active mcbtn" data-page="home">
-          <img class="nav-icon" src="./static/img/home.svg" alt="" />
-          <span>Home</span>
-        </button>
+          <button class="nav-btn mcbtn" data-page="installations">
+            <img class="nav-icon" src="./static/img/installations.svg" alt="" />
+            <span>Installations</span>
+          </button>
 
-        <button class="nav-btn mcbtn" data-page="installations">
-          <img class="nav-icon" src="./static/img/installations.svg" alt="" />
-          <span>Installations</span>
-        </button>
+          <button class="nav-btn mcbtn" data-page="console">
+            <img class="nav-icon" src="./static/img/console.svg" alt="" />
+            <span>Console</span>
+          </button>
 
-        <button class="nav-btn mcbtn" data-page="console">
-          <img class="nav-icon" src="./static/img/console.svg" alt="" />
-          <span>Console</span>
-        </button>
+          <button class="nav-btn mcbtn" data-page="changelog">
+            <img class="nav-icon" src="./static/img/changelog.svg" alt="" />
+            <span>Changelog</span>
+          </button>
 
-        <button class="nav-btn mcbtn" data-page="changelog">
-          <img class="nav-icon" src="./static/img/changelog.svg" alt="" />
-          <span>Changelog</span>
-        </button>
+          <button class="nav-btn mcbtn" data-page="settings">
+            <img class="nav-icon" src="./static/img/settings.svg" alt="" />
+            <span>Settings +WIP+</span>
+          </button>
+        </nav>
 
-        <button class="nav-btn mcbtn" data-page="settings">
-          <img class="nav-icon" src="./static/img/settings.svg" alt="" />
-          <span>Settings +WIP+</span>
-        </button>
-      </nav>
+        <div class="sidebar-icon-row">
+          <button id="discordBtn" class="nav-btn-small mcbtn discord" type="button">
+            <img src="./static/img/discord.svg" alt="Discord" />
+          </button>
 
-      <div class="sidebar-icon-row">
-        <button id="discordBtn" class="nav-btn-small mcbtn discord" type="button">
-          <img src="./static/img/discord.svg" alt="Discord" />
-        </button>
+          <button id="websiteBtn" class="nav-btn-small mcbtn website" type="button">
+            <img src="./static/img/website.svg" alt="Website" />
+          </button>
+        </div>
+      </aside>
 
-        <button id="websiteBtn" class="nav-btn-small mcbtn website" type="button">
-          <img src="./static/img/website.svg" alt="Website" />
-        </button>
-      </div>
-    </aside>
+      <section id="page-home" class="page active">
+        <section class="home-top-bar">
+          <button
+            class="home-top-btn linebtn active"
+            id="home-home"
+            data-home-tab="home"
+            type="button"
+          >
+            <img class="nav-icon" src="./static/img/home.svg" alt="home" />
+            <span>Home</span>
+          </button>
 
-    <section id="page-home" class="page active">
-      <section class="home-top-bar">
-        <button class="home-top-btn linebtn active" id="home-home" data-home-tab="home" type="button">
-          <img class="nav-icon" src="./static/img/home.svg" alt="home" />
-          <span>Home</span>
-        </button>
+          <button class="home-top-btn linebtn" id="home-skin" data-home-tab="skin" type="button">
+            <img class="nav-icon" src="./static/img/skin.svg" alt="skin" />
+            <span>Skin</span>
+          </button>
 
-        <button class="home-top-btn linebtn" id="home-skin" data-home-tab="skin" type="button">
-          <img class="nav-icon" src="./static/img/skin.svg" alt="skin" />
-          <span>Skin</span>
-        </button>
-
-        <button class="home-top-btn linebtn" id="home-friends" data-home-tab="friends" type="button">
-          <img class="nav-icon" src="./static/img/friends.svg" alt="friends" />
-          <span>Friends +WIP+</span>
-        </button>
-      </section>
-
-      <section id="home-tab-home" class="home-subpage active" data-home-page="home">
-        <section class="mcsection home-th-servers midtext">
-          <table>
-            <tr>
-              <th class="whitetext mct">Name</th>
-              <th class="whitetext mct">Ip</th>
-              <th class="whitetext mct">Players</th>
-            </tr>
-
-            <tr>
-              <td class="whitetext mcr">McPvP</td>
-              <td class="whitetext mcr">mcpvp.club</td>
-              <td><span id="server:mcpvp.club" class="server-status-text mcr">Loading...</span></td>
-            </tr>
-
-            <tr>
-              <td class="whitetext mcr">Starlight</td>
-              <td class="whitetext mcr">mc.wawe.cc</td>
-              <td><span id="server:mc.wawe.cc" class="server-status-text mcr">Loading...</span></td>
-            </tr>
-
-            <tr>
-              <td class="whitetext mcr">Hypixel</td>
-              <td class="whitetext mcr">hypixel.net</td>
-              <td><span id="server:hypixel.net" class="server-status-text mcr">Loading...</span></td>
-            </tr>
-
-            <tr>
-              <td class="whitetext mcr">Hoplite</td>
-              <td class="whitetext mcr">hoplite.gg</td>
-              <td><span id="server:hoplite.gg" class="server-status-text mcr">Loading...</span></td>
-            </tr>
-
-            <tr>
-              <td class="whitetext mcr">DonutSMP</td>
-              <td class="whitetext mcr">donutsmp.com</td>
-              <td><span id="server:donutsmp.com" class="server-status-text mcr">Loading...</span></td>
-            </tr>
-          </table>
-        </section>
-
-        <section class="mcsection home-th-friends"></section>
-
-        <section class="mcsection home-start-bar">
-          <div id="profileDropup" class="profile-dropup">
-            <button id="profileDropupButton" class="profile-dropup-button mcbtn" type="button">
-              <span id="selectedProfileName">Select Installation</span>
-              <span class="dropup-arrow">▲</span>
-            </button>
-
-            <div id="profileDropupMenu" class="profile-dropup-menu hidden"></div>
-          </div>
-
-          <button id="launchBtn" class="primary mcbtn start mcr" type="button">
-            <img id="launchRocket" src="./static/img/rocket.svg" alt="Start" />
-            <span>Start</span>
+          <button
+            class="home-top-btn linebtn"
+            id="home-friends"
+            data-home-tab="friends"
+            type="button"
+          >
+            <img class="nav-icon" src="./static/img/friends.svg" alt="friends" />
+            <span>Friends +WIP+</span>
           </button>
         </section>
-      </section>
 
-      <section id="home-tab-skin" class="home-subpage" data-home-page="skin">
-  <div class="skin-loading whitetext mcr">Open the Skin tab to load skins.</div>
-</section>
-      <section id="home-tab-friends" class="home-subpage" data-home-page="friends"></section>
-    </section>
+        <section id="home-tab-home" class="home-subpage active" data-home-page="home">
+          <section class="mcsection home-th-servers midtext">
+            <table>
+              <tr>
+                <th class="whitetext mct">Name</th>
+                <th class="whitetext mct">Ip</th>
+                <th class="whitetext mct">Players</th>
+              </tr>
 
-    <section id="page-installations" class="page">
-      <div class="installations-header">
-        <div class="installations-title-block">
-          <h2 class="mct whitetext shadow">Installations</h2>
-          <p class="whitetext mcr">Click a profile to select and edit it.</p>
-        </div>
+              <tr>
+                <td class="whitetext mcr">McPvP</td>
+                <td class="whitetext mcr">mcpvp.club</td>
+                <td>
+                  <span id="server:mcpvp.club" class="server-status-text mcr">Loading...</span>
+                </td>
+              </tr>
 
-        <button id="newProfileBtn" class="primary mcbtn">New Installation</button>
-      </div>
+              <tr>
+                <td class="whitetext mcr">Starlight</td>
+                <td class="whitetext mcr">mc.wawe.cc</td>
+                <td>
+                  <span id="server:mc.wawe.cc" class="server-status-text mcr">Loading...</span>
+                </td>
+              </tr>
 
-      <div id="installations-list" class="installations-list"></div>
-    </section>
+              <tr>
+                <td class="whitetext mcr">Hypixel</td>
+                <td class="whitetext mcr">hypixel.net</td>
+                <td>
+                  <span id="server:hypixel.net" class="server-status-text mcr">Loading...</span>
+                </td>
+              </tr>
 
-    <section id="page-console" class="page">
-      <div class="console-page">
-        <div class="console-header">
-          <div class="console-title-block">
-            <h2 class="mct whitetext shadow">Console</h2>
-            <p class="whitetext mcr">Launcher, updater, and game logs appear here.</p>
-          </div>
+              <tr>
+                <td class="whitetext mcr">Hoplite</td>
+                <td class="whitetext mcr">hoplite.gg</td>
+                <td>
+                  <span id="server:hoplite.gg" class="server-status-text mcr">Loading...</span>
+                </td>
+              </tr>
 
-          <button id="clearConsoleBtn" class="mcbtn mcr">Clear</button>
-        </div>
+              <tr>
+                <td class="whitetext mcr">DonutSMP</td>
+                <td class="whitetext mcr">donutsmp.com</td>
+                <td>
+                  <span id="server:donutsmp.com" class="server-status-text mcr">Loading...</span>
+                </td>
+              </tr>
+            </table>
+          </section>
 
-        <pre id="consoleOutput" class="console shadow"></pre>
-      </div>
-    </section>
+          <section class="mcsection home-th-friends"></section>
 
-    <section id="page-changelog" class="page">
-      <div class="changelog-page">
-        <div class="changelog-header">
-          <div class="changelog-title-block">
-            <p class="changelog-main-title whitetext mct shadow">Changelog</p>
-
-            <div class="news-tab-row">
-              <button
-                id="minecraftNewsBtn"
-                class="selectc-btn mcbtn row-news-nav news-tab-btn active"
-                data-news-tab="minecraft"
-                type="button"
-              >
-                <img class="select-icon minecraft-tab-logo" src="./static/img/minecraft.svg" alt="Minecraft" />
-                <span></span>
+          <section class="mcsection home-start-bar">
+            <div id="profileDropup" class="profile-dropup">
+              <button id="profileDropupButton" class="profile-dropup-button mcbtn" type="button">
+                <span id="selectedProfileName">Select Installation</span>
+                <span class="dropup-arrow">▲</span>
               </button>
 
-              <button
-                id="launcherNewsBtn"
-                class="selectc-btn mcbtn row-news-nav news-tab-btn"
-                data-news-tab="launcher"
-                type="button"
-              >
-                <img class="select-icon simgn" src="./static/img/changelog.svg" alt="" />
-                <span>Launcher</span>
-              </button>
+              <div id="profileDropupMenu" class="profile-dropup-menu hidden"></div>
             </div>
 
-            <p class="whitetext mcr">Launcher and Minecraft updates appear here.</p>
+            <button id="launchBtn" class="primary mcbtn start mcr" type="button">
+              <img id="launchRocket" src="./static/img/rocket.svg" alt="Start" />
+              <span>Start</span>
+            </button>
+          </section>
+        </section>
+
+        <section id="home-tab-skin" class="home-subpage" data-home-page="skin">
+          <div class="skin-loading whitetext mcr">Open the Skin tab to load skins.</div>
+        </section>
+        <section id="home-tab-friends" class="home-subpage" data-home-page="friends"></section>
+      </section>
+
+      <section id="page-installations" class="page">
+        <div class="installations-header">
+          <div class="installations-title-block">
+            <h2 class="mct whitetext shadow">Installations</h2>
+            <p class="whitetext mcr">Click a profile to select and edit it.</p>
           </div>
+
+          <button id="newProfileBtn" class="primary mcbtn">New Installation</button>
         </div>
 
-        <div class="news-frame-wrap shadow">
-          <webview
-            id="minecraftNewsFrame"
-            class="news-frame active"
-            data-src="https://www.minecraft.net/en-us/articles"
-            partition="persist:minecraft-news"
-          ></webview>
+        <div id="installations-list" class="installations-list"></div>
+      </section>
 
-          <webview
-            id="launcherNewsFrame"
-            class="news-frame"
-            data-src="https://launcher.wawe.cc/launcher/changelog/"
-            partition="persist:launcher-news"
-          ></webview>
-        </div>
-      </div>
-    </section>
+      <section id="page-console" class="page">
+        <div class="console-page">
+          <div class="console-header">
+            <div class="console-title-block">
+              <h2 class="mct whitetext shadow">Console</h2>
+              <p class="whitetext mcr">Launcher, updater, and game logs appear here.</p>
+            </div>
 
-    <section id="page-settings" class="page">
-      <div class="settings-header">
-        <div class="settings-title-block">
-          <h2 class="mct whitetext shadow">Profile Settings</h2>
-          <p class="whitetext mcr">Edit settings for the currently selected installation.</p>
-        </div>
-        <button id="saveSettingsBtn" class="primary mcbtn mcr">Save Settings</button>
-      </div>
+            <button id="clearConsoleBtn" class="mcbtn mcr">Clear</button>
+          </div>
 
-
-      <div class="settings-content midtext">
-<p class="whitetext mct">Launcher Settings</p>
-
-<div class="settings-row">
-  <div>
-    <p class="settings-row-title whitetext mct">Don&apos;t Close Launcher When Launched</p>
-    <p class="settings-row-desc whitetext mcr">Keeps the launcher open after Minecraft starts. Default: on.</p>
-  </div>
-
-  <label class="block-switch">
-    <input id="settingKeepLauncherOpenOnLaunch" type="checkbox" checked />
-    <span class="block-switch-track">
-      <span class="block-switch-knob"></span>
-    </span>
-  </label>
-</div>
-
-<div class="settings-row">
-  <div>
-    <p class="settings-row-title whitetext mct">Open Console On Launch</p>
-    <p class="settings-row-desc whitetext mcr">Automatically opens the console when Minecraft starts. Default: off.</p>
-  </div>
-
-  <label class="block-switch">
-    <input id="settingOpenConsoleOnLaunch" type="checkbox" />
-    <span class="block-switch-track">
-      <span class="block-switch-knob"></span>
-    </span>
-  </label>
-</div>
-
-        <p class="whitetext mct">Minecraft: Java edition Settings</p>
-          <div class="settings-row">
-    <div>
-      <p class="settings-row-title whitetext mct">SMP mode</p>
-      <p class="settings-row-desc whitetext mcr">Adds certain mods that helps smps. [Only works if your selected instalation is fabric]</p>
-    </div>
-
-    <label class="block-switch">
-      <input id="settingEnableSmpMode" type="checkbox" />
-      <span class="block-switch-track">
-        <span class="block-switch-knob"></span>
-      </span>
-    </label>
-  </div>
-        <p class="whitetext mct">Launcher: Test Settings</p>
-
-          <div class="settings-row">
-    <div>
-      <p class="settings-row-title whitetext mct">Test Toggle</p>
-      <p class="settings-row-desc whitetext mcr">Returns true when enabled, false when disabled.</p>
-    </div>
-
-    <label class="block-switch">
-      <input id="testBooleanSwitch" type="checkbox" />
-      <span class="block-switch-track">
-        <span class="block-switch-knob"></span>
-      </span>
-    </label>
-  </div>
-
-  <div class="settings-row">
-    <div>
-      <p class="settings-row-title whitetext mct">Test Input</p>
-      <p class="settings-row-desc whitetext mcr">Blocky dark input field.</p>
-    </div>
-
-    <input
-      id="testSettingsInput"
-      class="settings-text-input"
-      type="text"
-      placeholder="Type something..."
-    />
-  </div>
-
-  <div class="settings-row">
-    <div>
-      <p class="settings-row-title whitetext mct">Test Slider</p>
-      <p class="settings-row-desc whitetext mcr">Move the square along the line.</p>
-    </div>
-
-    <input
-      id="testSettingsSlider"
-      class="settings-slider"
-      type="range"
-      min="0"
-      max="100"
-      value="50"
-    />
-  </div>
-      </div>
-
-    </section>
-  </div>
-
-  <div id="installationEditorBackdrop" class="modal-backdrop hidden">
-    <div class="installation-editor mcsection shadow">
-      <div class="editor-top-row">
-        <button class="linebtn editor-tab-btn active" data-editor-tab="settings" type="button">
-          Settings
-        </button>
-
-        <button class="linebtn editor-tab-btn" data-editor-tab="mods" type="button">
-          Mods
-        </button>
-
-        <button id="saveInstallationBtn" class="linebtn" type="button">
-          Save
-        </button>
-
-        <button id="closeInstallationEditorBtn" class="mcbtn editor-close" type="button">
-          ×
-        </button>
-      </div>
-
-      <section id="editor-tab-settings" class="editor-subpage active">
-        <div class="editor-form-grid">
-          <label>
-            <span class="whitetext mcr">Name</span>
-            <input id="editorSettingName" class="editor-input" />
-          </label>
-
-          <label>
-            <span class="whitetext mcr">Minecraft Version</span>
-            <select id="editorSettingMcVersion" class="editor-input">
-              <option value="">Loading versions...</option>
-            </select>
-          </label>
-          
-          <label class="editor-checkbox-row">
-            <span class="whitetext mcr">Show snapshots</span>
-            <label class="block-switch">
-            <input id="editorShowSnapshots" type="checkbox" />
-      <span class="block-switch-track">
-        <span class="block-switch-knob"></span>
-      </span>
-    </label>
-    </label>
-
-
-
-
-
-
-          <label>
-            <span class="whitetext mcr">Version Type</span>
-            <select id="editorSettingVersionType" class="editor-input">
-              <option value="release">release</option>
-              <option value="snapshot">snapshot</option>
-            </select>
-          </label>
-
-          <label>
-            <span class="whitetext mcr">Loader</span>
-            <select id="editorSettingLoader" class="editor-input">
-              <option value="vanilla">vanilla</option>
-              <option value="fabric">fabric</option>
-              <option value="forge">forge</option>
-              <option value="quilt">quilt</option>
-              <option value="neoforge">neoforge</option>
-              <option value="custom">custom</option>
-            </select>
-          </label>
-
-          <label>
-            <span class="whitetext mcr">Custom Version ID</span>
-            <input id="editorSettingCustomVersionId" class="editor-input" />
-          </label>
-
-          <label>
-            <span class="whitetext mcr">Custom JSON Path</span>
-            <input id="editorSettingCustomJson" class="editor-input" />
-          </label>
-
-          <label>
-            <span class="whitetext mcr">Game Directory</span>
-            <input id="editorSettingGameDir" class="editor-input" />
-          </label>
-
-          <label>
-            <span class="whitetext mcr">Java Path</span>
-            <input id="editorSettingJavaPath" class="editor-input" />
-          </label>
-
-          <label>
-            <span class="whitetext mcr">Min Memory</span>
-            <input id="editorSettingMinMemory" class="editor-input" />
-          </label>
-
-          <label>
-            <span class="whitetext mcr">Max Memory</span>
-            <input id="editorSettingMaxMemory" class="editor-input" />
-          </label>
-
-          <label>
-            <span class="whitetext mcr">Width</span>
-            <input id="editorSettingWidth" class="editor-input" type="number" />
-          </label>
-
-          <label>
-            <span class="whitetext mcr">Height</span>
-            <input id="editorSettingHeight" class="editor-input" type="number" />
-          </label>
-
-          <label class="editor-checkbox-row">
-            <span class="whitetext mcr">Fullscreen</span>
-            <label class="block-switch">
-            <input id="editorSettingFullscreen" type="checkbox" />
-                  <span class="block-switch-track">
-        <span class="block-switch-knob"></span>
-      </span>
-          </label>
-          </label>
-
-          <label>
-            <span class="whitetext mcr">Extra JVM Args</span>
-            <input id="editorSettingJvmArgs" class="editor-input" />
-          </label>
-
-          <label>
-            <span class="whitetext mcr">Extra Minecraft Args</span>
-            <input id="editorSettingMcArgs" class="editor-input" />
-          </label>
+          <pre id="consoleOutput" class="console shadow"></pre>
         </div>
       </section>
 
-<section id="editor-tab-mods" class="editor-subpage">
-  <div class="editor-modrinth-update-row">
-    <div class="editor-modrinth-copy">
-      <p class="settings-row-title whitetext mct">Modrinth Collection</p>
-      <p class="settings-row-desc whitetext mcr">
-        Paste a Modrinth collection URL or ID. This updates/downloads the newest compatible mod files for this installation&apos;s Minecraft version and loader.
-      </p>
-    </div>
+      <section id="page-changelog" class="page">
+        <div class="changelog-page">
+          <div class="changelog-header">
+            <div class="changelog-title-block">
+              <p class="changelog-main-title whitetext mct shadow">Changelog</p>
 
-    <input
-      id="editorModrinthCollectionInput"
-      class="settings-text-input editor-modrinth-input"
-      type="text"
-      placeholder="https://modrinth.com/collection/..."
-    />
+              <div class="news-tab-row">
+                <button
+                  id="minecraftNewsBtn"
+                  class="selectc-btn mcbtn row-news-nav news-tab-btn active"
+                  data-news-tab="minecraft"
+                  type="button"
+                >
+                  <img
+                    class="select-icon minecraft-tab-logo"
+                    src="./static/img/minecraft.svg"
+                    alt="Minecraft"
+                  />
+                  <span></span>
+                </button>
 
-    <button id="updateEditorModsVersionBtn" class="mcbtn editor-small-btn" type="button">
-      Update Version
-    </button>
-  </div>
+                <button
+                  id="launcherNewsBtn"
+                  class="selectc-btn mcbtn row-news-nav news-tab-btn"
+                  data-news-tab="launcher"
+                  type="button"
+                >
+                  <img class="select-icon simgn" src="./static/img/changelog.svg" alt="" />
+                  <span>Launcher</span>
+                </button>
+              </div>
 
-  <div id="editorModrinthUpdateStatus" class="editor-modrinth-update-status whitetext mcr"></div>
+              <p class="whitetext mcr">Launcher and Minecraft updates appear here.</p>
+            </div>
+          </div>
 
-  <div id="editorModsDropZone" class="mods-drop-zone mcr">
-    Drop .jar mods here
-  </div>
+          <div class="news-frame-wrap shadow">
+            <webview
+              id="minecraftNewsFrame"
+              class="news-frame active"
+              data-src="https://www.minecraft.net/en-us/articles"
+              partition="persist:minecraft-news"
+            ></webview>
 
-  <button id="addEditorModsBtn" class="mcbtn mcr" type="button">
-    Add Mods
-  </button>
-
-  <div id="editorModsList" class="editor-mods-list"></div>
-</section>
-    </div>
-  </div>
-<div id="skinEditorBackdrop" class="modal-backdrop hidden skin-editor-backdrop">
-  <div class="skin-editor-panel">
-    <div class="skin-editor-window-top">
-      <p id="skinEditorTitle" class="skin-editor-title whitetext mct">Add new skin</p>
-
-      <button id="closeSkinEditorBtn" class="skin-editor-x" type="button">
-        ×
-      </button>
-    </div>
-
-    <div class="skin-editor-window-body">
-      <section class="skin-editor-left-preview">
-        <canvas
-  id="skinEditorCanvas"
-  width="320"
-  height="480"
-  class="skin-editor-preview-canvas"
-></canvas>
-
-        <div id="skinPaintWrap" class="skin-paint-wrap hidden">
-          <p class="whitetext mcr skin-paint-help">
-            Click and drag to paint pixels. This is a simple in-launcher editor.
-          </p>
-
-          <canvas
-            id="skinPaintCanvas"
-            width="512"
-            height="512"
-            class="skin-paint-canvas"
-          ></canvas>
-
-          <div class="skin-paint-controls">
-            <input id="skinPaintColor" type="color" value="#00ffff" />
-            <button id="skinPaintSaveBtn" class="mcbtn editor-small-btn" type="button">
-              Apply Paint
-            </button>
-            <button id="skinPaintCloseBtn" class="mcbtn editor-small-btn" type="button">
-              Close Paint
-            </button>
+            <webview
+              id="launcherNewsFrame"
+              class="news-frame"
+              data-src="https://launcher.wawe.cc/launcher/changelog/"
+              partition="persist:launcher-news"
+            ></webview>
           </div>
         </div>
       </section>
 
-      <section class="skin-editor-right-form">
-        <label class="skin-editor-field">
-          <span class="skin-editor-label whitetext mct">Name</span>
-          <input id="skinEditorName" class="skin-editor-name-input" type="text" />
-        </label>
+      <section id="page-settings" class="page">
+        <div class="settings-header">
+          <div class="settings-title-block">
+            <h2 class="mct whitetext shadow">Profile Settings</h2>
+            <p class="whitetext mcr">Edit settings for the currently selected installation.</p>
+          </div>
+          <button id="saveSettingsBtn" class="primary mcbtn mcr">Save Settings</button>
+        </div>
 
-        <div class="skin-editor-field">
-          <span class="skin-editor-label whitetext mct">Player Model</span>
+        <div class="settings-content midtext">
+          <p class="whitetext mct">Launcher Settings</p>
 
-          <div class="skin-model-radio-row">
-            <label class="skin-model-radio whitetext mcr">
-              <input id="skinEditorModelWide" name="skinEditorModel" type="radio" value="wide" checked />
-              <span>Wide</span>
-            </label>
+          <div class="settings-row">
+            <div>
+              <p class="settings-row-title whitetext mct">
+                Don&apos;t Close Launcher When Launched
+              </p>
+              <p class="settings-row-desc whitetext mcr">
+                Keeps the launcher open after Minecraft starts. Default: on.
+              </p>
+            </div>
 
-            <label class="skin-model-radio whitetext mcr">
-              <input id="skinEditorModelSlim" name="skinEditorModel" type="radio" value="slim" />
-              <span>Slim</span>
+            <label class="block-switch">
+              <input id="settingKeepLauncherOpenOnLaunch" type="checkbox" checked />
+              <span class="block-switch-track">
+                <span class="block-switch-knob"></span>
+              </span>
             </label>
           </div>
-        </div>
 
-        <div class="skin-editor-field">
-          <span class="skin-editor-label whitetext mct">Skin File</span>
+          <div class="settings-row">
+            <div>
+              <p class="settings-row-title whitetext mct">Open Console On Launch</p>
+              <p class="settings-row-desc whitetext mcr">
+                Automatically opens the console when Minecraft starts. Default: off.
+              </p>
+            </div>
 
-          <div class="skin-editor-button-row">
-            <button id="browseSkinFileBtn" class="mcbtn editor-small-btn" type="button">
-              Browse
-            </button>
-
-            <button id="editSkinPixelsBtn" class="mcbtn editor-small-btn" type="button">
-              Edit
-            </button>
+            <label class="block-switch">
+              <input id="settingOpenConsoleOnLaunch" type="checkbox" />
+              <span class="block-switch-track">
+                <span class="block-switch-knob"></span>
+              </span>
+            </label>
           </div>
-        </div>
 
-        <div class="skin-editor-field skin-editor-cape-field">
-          <span class="skin-editor-label whitetext mct">Cape</span>
+          <p class="whitetext mct">Minecraft: Java edition Settings</p>
+          <div class="settings-row">
+            <div>
+              <p class="settings-row-title whitetext mct">SMP mode</p>
+              <p class="settings-row-desc whitetext mcr">
+                Adds certain mods that helps smps. [Only works if your selected instalation is
+                fabric]
+              </p>
+            </div>
 
-          <div id="skinEditorCapeOptions" class="skin-cape-options"></div>
+            <label class="block-switch">
+              <input id="settingEnableSmpMode" type="checkbox" />
+              <span class="block-switch-track">
+                <span class="block-switch-knob"></span>
+              </span>
+            </label>
+          </div>
+          <p class="whitetext mct">Launcher: Test Settings</p>
+
+          <div class="settings-row">
+            <div>
+              <p class="settings-row-title whitetext mct">Test Toggle</p>
+              <p class="settings-row-desc whitetext mcr">
+                Returns true when enabled, false when disabled.
+              </p>
+            </div>
+
+            <label class="block-switch">
+              <input id="testBooleanSwitch" type="checkbox" />
+              <span class="block-switch-track">
+                <span class="block-switch-knob"></span>
+              </span>
+            </label>
+          </div>
+
+          <div class="settings-row">
+            <div>
+              <p class="settings-row-title whitetext mct">Test Input</p>
+              <p class="settings-row-desc whitetext mcr">Blocky dark input field.</p>
+            </div>
+
+            <input
+              id="testSettingsInput"
+              class="settings-text-input"
+              type="text"
+              placeholder="Type something..."
+            />
+          </div>
+
+          <div class="settings-row">
+            <div>
+              <p class="settings-row-title whitetext mct">Test Slider</p>
+              <p class="settings-row-desc whitetext mcr">Move the square along the line.</p>
+            </div>
+
+            <input
+              id="testSettingsSlider"
+              class="settings-slider"
+              type="range"
+              min="0"
+              max="100"
+              value="50"
+            />
+          </div>
         </div>
       </section>
     </div>
 
-    <div class="skin-editor-footer">
-      <button id="cancelSkinEditorBtn" class="mcbtn" type="button">
-        Cancel
-      </button>
+    <div id="installationEditorBackdrop" class="modal-backdrop hidden">
+      <div class="installation-editor mcsection shadow">
+        <div class="editor-top-row">
+          <button class="linebtn editor-tab-btn active" data-editor-tab="settings" type="button">
+            Settings
+          </button>
 
-      <button id="saveSkinEditorBtn" class="mcbtn" type="button">
-        Save
-      </button>
+          <button class="linebtn editor-tab-btn" data-editor-tab="mods" type="button">Mods</button>
 
-      <button id="saveUseSkinEditorBtn" class="mcbtn green" type="button">
-        Save &amp; Use
-      </button>
+          <button id="saveInstallationBtn" class="linebtn" type="button">Save</button>
+
+          <button id="closeInstallationEditorBtn" class="mcbtn editor-close" type="button">
+            ×
+          </button>
+        </div>
+
+        <section id="editor-tab-settings" class="editor-subpage active">
+          <div class="editor-form-grid">
+            <label>
+              <span class="whitetext mcr">Name</span>
+              <input id="editorSettingName" class="editor-input" />
+            </label>
+
+            <label>
+              <span class="whitetext mcr">Minecraft Version</span>
+              <select id="editorSettingMcVersion" class="editor-input">
+                <option value="">Loading versions...</option>
+              </select>
+            </label>
+
+            <label class="editor-checkbox-row">
+              <span class="whitetext mcr">Show snapshots</span>
+              <label class="block-switch">
+                <input id="editorShowSnapshots" type="checkbox" />
+                <span class="block-switch-track">
+                  <span class="block-switch-knob"></span>
+                </span>
+              </label>
+            </label>
+
+            <label>
+              <span class="whitetext mcr">Version Type</span>
+              <select id="editorSettingVersionType" class="editor-input">
+                <option value="release">release</option>
+                <option value="snapshot">snapshot</option>
+              </select>
+            </label>
+
+            <label>
+              <span class="whitetext mcr">Loader</span>
+              <select id="editorSettingLoader" class="editor-input">
+                <option value="vanilla">vanilla</option>
+                <option value="fabric">fabric</option>
+                <option value="forge">forge</option>
+                <option value="quilt">quilt</option>
+                <option value="neoforge">neoforge</option>
+                <option value="custom">custom</option>
+              </select>
+            </label>
+
+            <label>
+              <span class="whitetext mcr">Custom Version ID</span>
+              <input id="editorSettingCustomVersionId" class="editor-input" />
+            </label>
+
+            <label>
+              <span class="whitetext mcr">Custom JSON Path</span>
+              <input id="editorSettingCustomJson" class="editor-input" />
+            </label>
+
+            <label>
+              <span class="whitetext mcr">Game Directory</span>
+              <input id="editorSettingGameDir" class="editor-input" />
+            </label>
+
+            <label>
+              <span class="whitetext mcr">Java Path</span>
+              <input id="editorSettingJavaPath" class="editor-input" />
+            </label>
+
+            <label>
+              <span class="whitetext mcr">Min Memory</span>
+              <input id="editorSettingMinMemory" class="editor-input" />
+            </label>
+
+            <label>
+              <span class="whitetext mcr">Max Memory</span>
+              <input id="editorSettingMaxMemory" class="editor-input" />
+            </label>
+
+            <label>
+              <span class="whitetext mcr">Width</span>
+              <input id="editorSettingWidth" class="editor-input" type="number" />
+            </label>
+
+            <label>
+              <span class="whitetext mcr">Height</span>
+              <input id="editorSettingHeight" class="editor-input" type="number" />
+            </label>
+
+            <label class="editor-checkbox-row">
+              <span class="whitetext mcr">Fullscreen</span>
+              <label class="block-switch">
+                <input id="editorSettingFullscreen" type="checkbox" />
+                <span class="block-switch-track">
+                  <span class="block-switch-knob"></span>
+                </span>
+              </label>
+            </label>
+
+            <label>
+              <span class="whitetext mcr">Extra JVM Args</span>
+              <input id="editorSettingJvmArgs" class="editor-input" />
+            </label>
+
+            <label>
+              <span class="whitetext mcr">Extra Minecraft Args</span>
+              <input id="editorSettingMcArgs" class="editor-input" />
+            </label>
+          </div>
+        </section>
+
+        <section id="editor-tab-mods" class="editor-subpage">
+          <div class="editor-modrinth-update-row">
+            <div class="editor-modrinth-copy">
+              <p class="settings-row-title whitetext mct">Modrinth Collection</p>
+              <p class="settings-row-desc whitetext mcr">
+                Paste a Modrinth collection URL or ID. This updates/downloads the newest compatible
+                mod files for this installation&apos;s Minecraft version and loader.
+              </p>
+            </div>
+
+            <input
+              id="editorModrinthCollectionInput"
+              class="settings-text-input editor-modrinth-input"
+              type="text"
+              placeholder="https://modrinth.com/collection/..."
+            />
+
+            <button id="updateEditorModsVersionBtn" class="mcbtn editor-small-btn" type="button">
+              Update Version
+            </button>
+          </div>
+
+          <div
+            id="editorModrinthUpdateStatus"
+            class="editor-modrinth-update-status whitetext mcr"
+          ></div>
+
+          <div id="editorModsDropZone" class="mods-drop-zone mcr">Drop .jar mods here</div>
+
+          <button id="addEditorModsBtn" class="mcbtn mcr" type="button">Add Mods</button>
+
+          <div id="editorModsList" class="editor-mods-list"></div>
+        </section>
+      </div>
     </div>
-  </div>
-</div>
-<script src="../../node_modules/skinview3d/bundles/skinview3d.bundle.js"></script>
-<script src="./renderer.js"></script>
-</body>
+    <div id="skinEditorBackdrop" class="modal-backdrop hidden skin-editor-backdrop">
+      <div class="skin-editor-panel">
+        <div class="skin-editor-window-top">
+          <p id="skinEditorTitle" class="skin-editor-title whitetext mct">Add new skin</p>
+
+          <button id="closeSkinEditorBtn" class="skin-editor-x" type="button">×</button>
+        </div>
+
+        <div class="skin-editor-window-body">
+          <section class="skin-editor-left-preview">
+            <canvas
+              id="skinEditorCanvas"
+              width="320"
+              height="480"
+              class="skin-editor-preview-canvas"
+            ></canvas>
+
+            <div id="skinPaintWrap" class="skin-paint-wrap hidden">
+              <p class="whitetext mcr skin-paint-help">
+                Click and drag to paint pixels. This is a simple in-launcher editor.
+              </p>
+
+              <canvas
+                id="skinPaintCanvas"
+                width="512"
+                height="512"
+                class="skin-paint-canvas"
+              ></canvas>
+
+              <div class="skin-paint-controls">
+                <input id="skinPaintColor" type="color" value="#00ffff" />
+                <button id="skinPaintSaveBtn" class="mcbtn editor-small-btn" type="button">
+                  Apply Paint
+                </button>
+                <button id="skinPaintCloseBtn" class="mcbtn editor-small-btn" type="button">
+                  Close Paint
+                </button>
+              </div>
+            </div>
+          </section>
+
+          <section class="skin-editor-right-form">
+            <label class="skin-editor-field">
+              <span class="skin-editor-label whitetext mct">Name</span>
+              <input id="skinEditorName" class="skin-editor-name-input" type="text" />
+            </label>
+
+            <div class="skin-editor-field">
+              <span class="skin-editor-label whitetext mct">Player Model</span>
+
+              <div class="skin-model-radio-row">
+                <label class="skin-model-radio whitetext mcr">
+                  <input
+                    id="skinEditorModelWide"
+                    name="skinEditorModel"
+                    type="radio"
+                    value="wide"
+                    checked
+                  />
+                  <span>Wide</span>
+                </label>
+
+                <label class="skin-model-radio whitetext mcr">
+                  <input
+                    id="skinEditorModelSlim"
+                    name="skinEditorModel"
+                    type="radio"
+                    value="slim"
+                  />
+                  <span>Slim</span>
+                </label>
+              </div>
+            </div>
+
+            <div class="skin-editor-field">
+              <span class="skin-editor-label whitetext mct">Skin File</span>
+
+              <div class="skin-editor-button-row">
+                <button id="browseSkinFileBtn" class="mcbtn editor-small-btn" type="button">
+                  Browse
+                </button>
+
+                <button id="editSkinPixelsBtn" class="mcbtn editor-small-btn" type="button">
+                  Edit
+                </button>
+              </div>
+            </div>
+
+            <div class="skin-editor-field skin-editor-cape-field">
+              <span class="skin-editor-label whitetext mct">Cape</span>
+
+              <div id="skinEditorCapeOptions" class="skin-cape-options"></div>
+            </div>
+          </section>
+        </div>
+
+        <div class="skin-editor-footer">
+          <button id="cancelSkinEditorBtn" class="mcbtn" type="button">Cancel</button>
+
+          <button id="saveSkinEditorBtn" class="mcbtn" type="button">Save</button>
+
+          <button id="saveUseSkinEditorBtn" class="mcbtn green" type="button">
+            Save &amp; Use
+          </button>
+        </div>
+      </div>
+    </div>
+    <script src="../../node_modules/skinview3d/bundles/skinview3d.bundle.js"></script>
+    <script src="./renderer.js"></script>
+  </body>
 </html>

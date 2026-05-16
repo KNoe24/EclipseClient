@@ -13,7 +13,7 @@ function sendStatus(type, data = {}) {
 
   mainWindow.webContents.send("updater:status", {
     type,
-    ...data
+    ...data,
   });
 }
 
@@ -30,28 +30,28 @@ function bindWindow(window) {
     sendStatus("checking");
   });
 
-  autoUpdater.on("update-available", info => {
+  autoUpdater.on("update-available", (info) => {
     updateInfo = info;
     sendStatus("available", { info });
   });
 
-  autoUpdater.on("update-not-available", info => {
+  autoUpdater.on("update-not-available", (info) => {
     sendStatus("not-available", { info });
   });
 
-  autoUpdater.on("error", error => {
+  autoUpdater.on("error", (error) => {
     sendStatus("error", {
-      message: error.message || String(error)
+      message: error.message || String(error),
     });
   });
 
-  autoUpdater.on("download-progress", progress => {
+  autoUpdater.on("download-progress", (progress) => {
     sendStatus("download-progress", {
-      progress
+      progress,
     });
   });
 
-  autoUpdater.on("update-downloaded", info => {
+  autoUpdater.on("update-downloaded", (info) => {
     updateInfo = info;
     sendStatus("downloaded", { info });
   });
@@ -60,13 +60,13 @@ function bindWindow(window) {
 async function check() {
   if (!app.isPackaged) {
     sendStatus("dev-mode", {
-      message: "Auto-updater only works in packaged builds."
+      message: "Auto-updater only works in packaged builds.",
     });
 
     return {
       ok: false,
       devMode: true,
-      message: "Auto-updater only works in packaged builds."
+      message: "Auto-updater only works in packaged builds.",
     };
   }
 
@@ -74,7 +74,7 @@ async function check() {
 
   return {
     ok: true,
-    result
+    result,
   };
 }
 
@@ -82,14 +82,14 @@ async function download() {
   if (!updateInfo) {
     return {
       ok: false,
-      error: "No update available."
+      error: "No update available.",
     };
   }
 
   await autoUpdater.downloadUpdate();
 
   return {
-    ok: true
+    ok: true,
   };
 }
 
@@ -97,7 +97,7 @@ async function install() {
   autoUpdater.quitAndInstall(false, true);
 
   return {
-    ok: true
+    ok: true,
   };
 }
 
@@ -105,5 +105,5 @@ module.exports = {
   bindWindow,
   check,
   download,
-  install
+  install,
 };

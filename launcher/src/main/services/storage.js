@@ -217,5 +217,5 @@ module.exports = {
   getFilePath,
   getClientPath,
   readJson,
-  writeJson
+  writeJson,
 };

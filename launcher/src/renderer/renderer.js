@@ -23,12 +23,12 @@ const capePreviewColors = [
   "#e0b22f",
   "#7f58ff",
   "#3b8c44",
-  "#b54838"
+  "#b54838",
 ];
 
 const LAUNCHER_SETTING_KEYS = {
   keepLauncherOpenOnLaunch: "launcher.keepLauncherOpenOnLaunch",
-  openConsoleOnLaunch: "launcher.openConsoleOnLaunch"
+  openConsoleOnLaunch: "launcher.openConsoleOnLaunch",
 };
 
 const DEFAULT_INSTALLATION_ICONS = [
@@ -37,7 +37,7 @@ const DEFAULT_INSTALLATION_ICONS = [
   { id: "stone", label: "Stone" },
   { id: "diamond", label: "Diamond" },
   { id: "crafting", label: "Crafting Table" },
-  { id: "furnace", label: "Furnace" }
+  { id: "furnace", label: "Furnace" },
 ];
 
 let consoleLines = [];
@@ -56,7 +56,7 @@ const state = {
   installationBackdropMouseDownOnBackdrop: false,
   installationEditor: {
     profileId: null,
-    tab: "settings"
+    tab: "settings",
   },
   skins: {
     loaded: false,
@@ -71,12 +71,12 @@ const state = {
     previewDragging: false,
     previewDragStartX: 0,
     previewDragStartRotation: 0,
-    animationFrame: null
-  }
+    animationFrame: null,
+  },
 };
 
-const $ = selector => document.querySelector(selector);
-const $$ = selector => Array.from(document.querySelectorAll(selector));
+const $ = (selector) => document.querySelector(selector);
+const $$ = (selector) => Array.from(document.querySelectorAll(selector));
 
 function setStatus(text) {
   const status = $("#launcherStatus");
@@ -113,10 +113,7 @@ function getLauncherSettings() {
       LAUNCHER_SETTING_KEYS.keepLauncherOpenOnLaunch,
       true
     ),
-    openConsoleOnLaunch: readBooleanSetting(
-      LAUNCHER_SETTING_KEYS.openConsoleOnLaunch,
-      false
-    )
+    openConsoleOnLaunch: readBooleanSetting(LAUNCHER_SETTING_KEYS.openConsoleOnLaunch, false),
   };
 }
 
@@ -139,17 +136,11 @@ function saveLauncherSettingsControls() {
   const openConsole = $("#settingOpenConsoleOnLaunch");
 
   if (keepOpen) {
-    writeBooleanSetting(
-      LAUNCHER_SETTING_KEYS.keepLauncherOpenOnLaunch,
-      keepOpen.checked
-    );
+    writeBooleanSetting(LAUNCHER_SETTING_KEYS.keepLauncherOpenOnLaunch, keepOpen.checked);
   }
 
   if (openConsole) {
-    writeBooleanSetting(
-      LAUNCHER_SETTING_KEYS.openConsoleOnLaunch,
-      openConsole.checked
-    );
+    writeBooleanSetting(LAUNCHER_SETTING_KEYS.openConsoleOnLaunch, openConsole.checked);
   }
 
   setStatus("Launcher settings saved.");
@@ -160,20 +151,14 @@ function initLauncherSettingsEvents() {
   const keepOpen = $("#settingKeepLauncherOpenOnLaunch");
   if (keepOpen) {
     keepOpen.addEventListener("change", () => {
-      writeBooleanSetting(
-        LAUNCHER_SETTING_KEYS.keepLauncherOpenOnLaunch,
-        keepOpen.checked
-      );
+      writeBooleanSetting(LAUNCHER_SETTING_KEYS.keepLauncherOpenOnLaunch, keepOpen.checked);
     });
   }
 
   const openConsole = $("#settingOpenConsoleOnLaunch");
   if (openConsole) {
     openConsole.addEventListener("change", () => {
-      writeBooleanSetting(
-        LAUNCHER_SETTING_KEYS.openConsoleOnLaunch,
-        openConsole.checked
-      );
+      writeBooleanSetting(LAUNCHER_SETTING_KEYS.openConsoleOnLaunch, openConsole.checked);
     });
   }
 
@@ -291,11 +276,11 @@ function loadActiveNewsFrame() {
 }
 
 function showHomeTab(name) {
-  $$(".home-subpage").forEach(page => {
+  $$(".home-subpage").forEach((page) => {
     page.classList.toggle("active", page.dataset.homePage === name);
   });
 
-  $$(".home-top-btn").forEach(button => {
+  $$(".home-top-btn").forEach((button) => {
     button.classList.toggle("active", button.dataset.homeTab === name);
   });
 
@@ -307,7 +292,7 @@ function showHomeTab(name) {
 }
 
 function initHomeTabs() {
-  $$(".home-top-btn").forEach(button => {
+  $$(".home-top-btn").forEach((button) => {
     button.addEventListener("click", () => {
       showHomeTab(button.dataset.homeTab);
     });
@@ -317,12 +302,12 @@ function initHomeTabs() {
 function showPage(name) {
   state.currentPage = name;
 
-  $$(".page").forEach(page => page.classList.remove("active"));
+  $$(".page").forEach((page) => page.classList.remove("active"));
 
   const page = $(`#page-${name}`);
   if (page) page.classList.add("active");
 
-  $$(".nav-btn").forEach(button => {
+  $$(".nav-btn").forEach((button) => {
     button.classList.toggle("active", button.dataset.page === name);
   });
 
@@ -358,7 +343,7 @@ function selectedProfileId() {
 }
 
 function findProfile(id) {
-  return state.profilesData?.profiles.find(profile => profile.id === id) || null;
+  return state.profilesData?.profiles.find((profile) => profile.id === id) || null;
 }
 
 function getSelectedProfile() {
@@ -375,7 +360,7 @@ function escapeHtml(value) {
 }
 
 function safeIconId(value) {
-  const found = DEFAULT_INSTALLATION_ICONS.find(icon => icon.id === value);
+  const found = DEFAULT_INSTALLATION_ICONS.find((icon) => icon.id === value);
   return found ? found.id : "grass";
 }
 
@@ -507,7 +492,7 @@ async function loadMinecraftVersions() {
     }
 
     state.minecraftVersions = await window.launcherAPI.profiles.listMinecraftVersions({
-      includeSnapshots: true
+      includeSnapshots: true,
     });
 
     populateEditorMinecraftVersionSelect();
@@ -521,10 +506,7 @@ async function loadMinecraftVersions() {
 }
 
 async function loadEditorVersionData() {
-  await Promise.all([
-    loadInstalledVersions(),
-    loadMinecraftVersions()
-  ]);
+  await Promise.all([loadInstalledVersions(), loadMinecraftVersions()]);
 
   populateEditorMinecraftVersionSelect();
 }
@@ -701,17 +683,17 @@ function renderProfilesList() {
       </div>
     `;
 
-    card.querySelector('[data-action="select"]').addEventListener("click", async event => {
+    card.querySelector('[data-action="select"]').addEventListener("click", async (event) => {
       event.stopPropagation();
       await selectProfile(profile.id);
     });
 
-    card.querySelector('[data-action="edit"]').addEventListener("click", event => {
+    card.querySelector('[data-action="edit"]').addEventListener("click", (event) => {
       event.stopPropagation();
       openInstallationEditor(profile.id);
     });
 
-    card.querySelector('[data-action="delete"]').addEventListener("click", async event => {
+    card.querySelector('[data-action="delete"]').addEventListener("click", async (event) => {
       event.stopPropagation();
 
       const profiles = state.profilesData?.profiles || [];
@@ -794,7 +776,7 @@ async function renderMods() {
     root.appendChild(row);
   }
 
-  root.querySelectorAll("button[data-filename]").forEach(button => {
+  root.querySelectorAll("button[data-filename]").forEach((button) => {
     button.addEventListener("click", async () => {
       await window.launcherAPI.mods.remove(profileId, button.dataset.filename);
       await renderMods();
@@ -820,7 +802,7 @@ function fillSettingsForm() {
     "#settingWidth": profile.width || 854,
     "#settingHeight": profile.height || 480,
     "#settingJvmArgs": profile.extraJvmArgs || "",
-    "#settingMcArgs": profile.extraMcArgs || ""
+    "#settingMcArgs": profile.extraMcArgs || "",
   };
 
   for (const [selector, value] of Object.entries(fields)) {
@@ -848,7 +830,7 @@ function getSettingsPatch() {
     height: Number($("#settingHeight")?.value || 480),
     fullscreen: Boolean($("#settingFullscreen")?.checked),
     extraJvmArgs: $("#settingJvmArgs")?.value.trim() || "",
-    extraMcArgs: $("#settingMcArgs")?.value.trim() || ""
+    extraMcArgs: $("#settingMcArgs")?.value.trim() || "",
   };
 }
 
@@ -867,14 +849,13 @@ async function loadSystemMemoryInfo() {
     // Fall back below.
   }
 
-  detectedTotalMemoryGb = Math.max(
-    1,
-    Number(navigator.deviceMemory || DEFAULT_MEMORY_TOTAL_GB)
-  );
+  detectedTotalMemoryGb = Math.max(1, Number(navigator.deviceMemory || DEFAULT_MEMORY_TOTAL_GB));
 }
 
 function parseMemoryGb(value, fallbackGb) {
-  const text = String(value || "").trim().toUpperCase();
+  const text = String(value || "")
+    .trim()
+    .toUpperCase();
   const number = Number((text.match(/[\d.]+/) || [fallbackGb])[0]);
 
   if (text.endsWith("M") || text.endsWith("MB")) {
@@ -970,15 +951,9 @@ function fillEditorMemorySliders(profile) {
   if (minSlider) minSlider.max = String(totalGb);
   if (maxSlider) maxSlider.max = String(totalGb);
 
-  const minGb = Math.min(
-    totalGb,
-    parseMemoryGb(profile?.minMemory, 2)
-  );
+  const minGb = Math.min(totalGb, parseMemoryGb(profile?.minMemory, 2));
 
-  const maxGb = Math.min(
-    totalGb,
-    Math.max(minGb, parseMemoryGb(profile?.maxMemory, 4))
-  );
+  const maxGb = Math.min(totalGb, Math.max(minGb, parseMemoryGb(profile?.maxMemory, 4)));
 
   if (minSlider) minSlider.value = String(minGb);
   if (maxSlider) maxSlider.value = String(maxGb);
@@ -1030,7 +1005,7 @@ function ensureEditorExtraControls() {
     <div class="editor-control-row">
       <div id="editorIconPreview" class="editor-icon-preview installation-icon-grass"></div>
       <select id="editorSettingIcon" class="editor-input grow-input">
-        ${DEFAULT_INSTALLATION_ICONS.map(icon => `<option value="${icon.id}">${escapeHtml(icon.label)}</option>`).join("")}
+        ${DEFAULT_INSTALLATION_ICONS.map((icon) => `<option value="${icon.id}">${escapeHtml(icon.label)}</option>`).join("")}
         <option value="custom">Custom PNG</option>
       </select>
       <button id="pickEditorIconBtn" class="mcbtn editor-small-btn" type="button">Upload PNG</button>
@@ -1110,11 +1085,11 @@ function closeInstallationEditor() {
 function showEditorTab(tab) {
   state.installationEditor.tab = tab;
 
-  $$(".editor-subpage").forEach(page => {
+  $$(".editor-subpage").forEach((page) => {
     page.classList.toggle("active", page.id === `editor-tab-${tab}`);
   });
 
-  $$(".editor-tab-btn").forEach(button => {
+  $$(".editor-tab-btn").forEach((button) => {
     button.classList.toggle("active", button.dataset.editorTab === tab);
   });
 
@@ -1137,9 +1112,10 @@ function updateEditorIconPreview() {
   if (iconSelect.value === "custom") {
     preview.classList.add("custom-icon");
 
-    const dataUrl = profile?.customIconDataUrl && iconPathInput?.value === profile.iconPath
-      ? profile.customIconDataUrl
-      : iconPathInput?.dataset.dataUrl;
+    const dataUrl =
+      profile?.customIconDataUrl && iconPathInput?.value === profile.iconPath
+        ? profile.customIconDataUrl
+        : iconPathInput?.dataset.dataUrl;
 
     if (dataUrl) {
       const img = document.createElement("img");
@@ -1160,12 +1136,16 @@ function updateEditorIconPreview() {
 }
 
 function normalizeLoaderType(value) {
-  return String(value || "vanilla").trim().toLowerCase() || "vanilla";
+  return (
+    String(value || "vanilla")
+      .trim()
+      .toLowerCase() || "vanilla"
+  );
 }
 
 function getOfficialVersionInfo(versionId) {
   const id = String(versionId || "");
-  return state.minecraftVersions.find(version => version.id === id) || null;
+  return state.minecraftVersions.find((version) => version.id === id) || null;
 }
 
 function getInstalledVersionType(version) {
@@ -1200,15 +1180,18 @@ function getCurrentEditorMinecraftVersionValue() {
   );
 }
 
-function addEditorVersionOption(select, {
-  value,
-  label,
-  minecraftVersion,
-  versionType = "release",
-  loaderType = "vanilla",
-  customVersionId = "",
-  selected = false
-}) {
+function addEditorVersionOption(
+  select,
+  {
+    value,
+    label,
+    minecraftVersion,
+    versionType = "release",
+    loaderType = "vanilla",
+    customVersionId = "",
+    selected = false,
+  }
+) {
   const option = document.createElement("option");
 
   option.value = value;
@@ -1247,15 +1230,13 @@ function populateEditorMinecraftVersionSelect() {
   let hasSelectedOption = false;
 
   if (loader === "vanilla") {
-    const versions = state.minecraftVersions.filter(version => {
+    const versions = state.minecraftVersions.filter((version) => {
       if (version.type === "release") return true;
       return showSnapshots && version.type === "snapshot";
     });
 
     for (const version of versions) {
-      const selected =
-        !currentCustomVersionId &&
-        version.id === currentMinecraftVersion;
+      const selected = !currentCustomVersionId && version.id === currentMinecraftVersion;
 
       hasSelectedOption = hasSelectedOption || selected;
 
@@ -1266,11 +1247,14 @@ function populateEditorMinecraftVersionSelect() {
         versionType: version.type,
         loaderType: "vanilla",
         customVersionId: "",
-        selected
+        selected,
       });
     }
 
-    if (currentMinecraftVersion && !versions.some(version => version.id === currentMinecraftVersion)) {
+    if (
+      currentMinecraftVersion &&
+      !versions.some((version) => version.id === currentMinecraftVersion)
+    ) {
       addEditorVersionOption(select, {
         value: currentMinecraftVersion,
         label: `${currentMinecraftVersion} (current / not in list)`,
@@ -1278,7 +1262,7 @@ function populateEditorMinecraftVersionSelect() {
         versionType: $("#editorSettingVersionType")?.value || profile?.versionType || "release",
         loaderType: "vanilla",
         customVersionId: "",
-        selected: true
+        selected: true,
       });
 
       hasSelectedOption = true;
@@ -1292,13 +1276,13 @@ function populateEditorMinecraftVersionSelect() {
         versionType: "release",
         loaderType: "vanilla",
         customVersionId: "",
-        selected: true
+        selected: true,
       });
 
       hasSelectedOption = true;
     }
   } else {
-    const versions = state.installedVersions.filter(version => {
+    const versions = state.installedVersions.filter((version) => {
       const versionLoader = normalizeLoaderType(version.loaderType);
       const versionType = getInstalledVersionType(version);
 
@@ -1324,11 +1308,14 @@ function populateEditorMinecraftVersionSelect() {
         versionType,
         loaderType: version.loaderType || loader,
         customVersionId: version.isVanilla ? "" : version.id,
-        selected
+        selected,
       });
     }
 
-    if (currentCustomVersionId && !versions.some(version => version.id === currentCustomVersionId)) {
+    if (
+      currentCustomVersionId &&
+      !versions.some((version) => version.id === currentCustomVersionId)
+    ) {
       addEditorVersionOption(select, {
         value: currentCustomVersionId,
         label: `${currentMinecraftVersion} · ${currentCustomVersionId} (current / not in list)`,
@@ -1336,7 +1323,7 @@ function populateEditorMinecraftVersionSelect() {
         versionType: $("#editorSettingVersionType")?.value || profile?.versionType || "release",
         loaderType: loader,
         customVersionId: currentCustomVersionId,
-        selected: true
+        selected: true,
       });
 
       hasSelectedOption = true;
@@ -1366,15 +1353,21 @@ function getEditorMinecraftVersionSelection() {
       minecraftVersion: selectedOption.dataset.minecraftVersion || selectedOption.value || "1.21.1",
       versionType: selectedOption.dataset.versionType || "release",
       loaderType: selectedOption.dataset.loaderType || getEditorSelectedLoader(),
-      customVersionId: selectedOption.dataset.customVersionId || ""
+      customVersionId: selectedOption.dataset.customVersionId || "",
     };
   }
 
   return {
-    minecraftVersion: select?.dataset.selectedMinecraftVersion || select?.value || getEditorProfile()?.minecraftVersion || "1.21.1",
-    versionType: $("#editorSettingVersionType")?.value || getEditorProfile()?.versionType || "release",
+    minecraftVersion:
+      select?.dataset.selectedMinecraftVersion ||
+      select?.value ||
+      getEditorProfile()?.minecraftVersion ||
+      "1.21.1",
+    versionType:
+      $("#editorSettingVersionType")?.value || getEditorProfile()?.versionType || "release",
     loaderType: getEditorSelectedLoader(),
-    customVersionId: $("#editorSettingCustomVersionId")?.value.trim() || getEditorProfile()?.customVersionId || ""
+    customVersionId:
+      $("#editorSettingCustomVersionId")?.value.trim() || getEditorProfile()?.customVersionId || "",
   };
 }
 
@@ -1426,7 +1419,7 @@ function populateEditorJavaSelect() {
     select.appendChild(option);
   }
 
-  if (currentJavaPath && !state.javaInstallations.some(java => java.path === currentJavaPath)) {
+  if (currentJavaPath && !state.javaInstallations.some((java) => java.path === currentJavaPath)) {
     const option = document.createElement("option");
     option.value = currentJavaPath;
     option.textContent = `Manual: ${currentJavaPath}`;
@@ -1457,7 +1450,7 @@ function fillEditorSettings() {
     "#editorSettingJvmArgs": profile.extraJvmArgs || "",
     "#editorSettingMcArgs": profile.extraMcArgs || "",
     "#editorSettingIcon": profile.icon || "grass",
-    "#editorSettingIconPath": profile.iconPath || ""
+    "#editorSettingIconPath": profile.iconPath || "",
   };
 
   for (const [selector, value] of Object.entries(fields)) {
@@ -1498,7 +1491,8 @@ function getEditorSettingsPatch() {
     minecraftVersion: versionSelection.minecraftVersion || "1.21.1",
     versionType: versionSelection.versionType || $("#editorSettingVersionType")?.value || "release",
     loaderType: $("#editorSettingLoader")?.value || versionSelection.loaderType || "vanilla",
-    customVersionId: versionSelection.customVersionId || $("#editorSettingCustomVersionId")?.value.trim() || "",
+    customVersionId:
+      versionSelection.customVersionId || $("#editorSettingCustomVersionId")?.value.trim() || "",
     customVersionJsonPath: $("#editorSettingCustomJson")?.value.trim() || "",
     gameDir: $("#editorSettingGameDir")?.value.trim() || "",
     javaPath: $("#editorSettingJavaPath")?.value.trim() || "",
@@ -1510,7 +1504,7 @@ function getEditorSettingsPatch() {
     extraJvmArgs: $("#editorSettingJvmArgs")?.value.trim() || "",
     extraMcArgs: $("#editorSettingMcArgs")?.value.trim() || "",
     icon: $("#editorSettingIcon")?.value || "grass",
-    iconPath: $("#editorSettingIconPath")?.value.trim() || ""
+    iconPath: $("#editorSettingIconPath")?.value.trim() || "",
   };
 }
 
@@ -1519,10 +1513,7 @@ async function saveEditorSettings() {
   if (!profileId) return;
 
   try {
-    const updated = await window.launcherAPI.profiles.update(
-      profileId,
-      getEditorSettingsPatch()
-    );
+    const updated = await window.launcherAPI.profiles.update(profileId, getEditorSettingsPatch());
 
     await loadProfiles();
     await selectProfile(updated.id);
@@ -1580,11 +1571,7 @@ async function renderEditorMods() {
 
       row.querySelector('[data-action="toggle"]').addEventListener("click", async () => {
         try {
-          await window.launcherAPI.mods.setEnabled(
-            profileId,
-            mod.filename,
-            !mod.enabled
-          );
+          await window.launcherAPI.mods.setEnabled(profileId, mod.filename, !mod.enabled);
 
           await renderEditorMods();
         } catch (error) {
@@ -1643,7 +1630,7 @@ function summarizeModrinthUpdateResult(result) {
     `Downloaded: ${stats.downloaded ?? 0}`,
     `Updated: ${stats.updated ?? 0}`,
     `Skipped: ${stats.skipped ?? 0}`,
-    `Failed: ${stats.failed ?? 0}`
+    `Failed: ${stats.failed ?? 0}`,
   ].join(" · ");
 }
 
@@ -1704,7 +1691,7 @@ async function updateEditorModsFromModrinthCollection() {
 
     const result = await window.launcherAPI.mods.add(profileId, {
       source: "modrinth-collection",
-      collection: collectionInput
+      collection: collectionInput,
     });
 
     setEditorModrinthUpdateStatus(summarizeModrinthUpdateResult(result));
@@ -1727,7 +1714,7 @@ async function updateEditorModsFromModrinthCollection() {
 /* ----------------------------- Skin changer ----------------------------- */
 
 function imageToDataUrl(url) {
-  return new Promise(resolve => {
+  return new Promise((resolve) => {
     if (!url) {
       resolve("");
       return;
@@ -1765,12 +1752,12 @@ function getSkinPreviewSource(skin) {
 
 function getCurrentSkinFromMinecraftProfile() {
   const skins = state.skins.minecraftProfile?.skins || [];
-  const active = skins.find(skin => skin.state === "ACTIVE") || skins[0] || null;
+  const active = skins.find((skin) => skin.state === "ACTIVE") || skins[0] || null;
 
   if (active?.url) {
     return {
       ...active,
-      url: active.url.replace(/^http:\/\//i, "https://")
+      url: active.url.replace(/^http:\/\//i, "https://"),
     };
   }
 
@@ -1781,7 +1768,7 @@ function getCurrentSkinFromMinecraftProfile() {
       id: "session-active-skin",
       state: "ACTIVE",
       url: sessionSkinUrl.replace(/^http:\/\//i, "https://"),
-      variant: state.skins.minecraftProfile?.sessionTextures?.model || "CLASSIC"
+      variant: state.skins.minecraftProfile?.sessionTextures?.model || "CLASSIC",
     };
   }
 
@@ -1789,18 +1776,18 @@ function getCurrentSkinFromMinecraftProfile() {
     id: "default-steve",
     state: "ACTIVE",
     url: DEFAULT_STEVE_SKIN,
-    variant: "CLASSIC"
+    variant: "CLASSIC",
   };
 }
 
 function getActiveCapeFromMinecraftProfile() {
   const capes = state.skins.minecraftProfile?.capes || [];
-  const active = capes.find(cape => cape.state === "ACTIVE") || null;
+  const active = capes.find((cape) => cape.state === "ACTIVE") || null;
 
   if (active?.url) {
     return {
       ...active,
-      url: active.url.replace(/^http:\/\//i, "https://")
+      url: active.url.replace(/^http:\/\//i, "https://"),
     };
   }
 
@@ -1811,7 +1798,7 @@ function getActiveCapeFromMinecraftProfile() {
       id: `session:${sessionCapeUrl}`,
       state: "ACTIVE",
       url: sessionCapeUrl.replace(/^http:\/\//i, "https://"),
-      alias: "Mojang Cape"
+      alias: "Mojang Cape",
     };
   }
 
@@ -1824,13 +1811,13 @@ function getAvailableCapes() {
     : [];
 
   const normalized = capes
-    .filter(cape => cape?.url)
-    .map(cape => ({
+    .filter((cape) => cape?.url)
+    .map((cape) => ({
       id: cape.id || cape.alias || cape.url || "",
       name: cape.alias || cape.id || "Cape",
       url: String(cape.url || "").replace(/^http:\/\//i, "https://"),
       state: cape.state || "",
-      source: "minecraft-services"
+      source: "minecraft-services",
     }));
 
   const sessionCapeUrl = state.skins.minecraftProfile?.sessionTextures?.capeUrl || "";
@@ -1838,7 +1825,7 @@ function getAvailableCapes() {
   if (sessionCapeUrl) {
     const httpsSessionCapeUrl = sessionCapeUrl.replace(/^http:\/\//i, "https://");
 
-    const alreadyListed = normalized.some(cape => cape.url === httpsSessionCapeUrl);
+    const alreadyListed = normalized.some((cape) => cape.url === httpsSessionCapeUrl);
 
     if (!alreadyListed) {
       normalized.unshift({
@@ -1846,7 +1833,7 @@ function getAvailableCapes() {
         name: "Active Cape",
         url: httpsSessionCapeUrl,
         state: "ACTIVE",
-        source: "sessionserver"
+        source: "sessionserver",
       });
     }
   }
@@ -1927,7 +1914,7 @@ function drawMinecraftSkin(canvas, skinSource, options = {}) {
     context.clearRect(0, 0, width, height);
     context.imageSmoothingEnabled = false;
 
-    const rotation = ((options.rotation || 0) % 360 + 360) % 360;
+    const rotation = (((options.rotation || 0) % 360) + 360) % 360;
     const isBack = rotation > 90 && rotation < 270;
 
     const slim = options.model === "slim";
@@ -1936,17 +1923,11 @@ function drawMinecraftSkin(canvas, skinSource, options = {}) {
     const originX = Math.floor(width / 2 - 10 * unit);
     const originY = Math.floor(height / 2 - 24 * unit);
 
-    const face = isBack
-      ? { x: 24, y: 8, w: 8, h: 8 }
-      : { x: 8, y: 8, w: 8, h: 8 };
+    const face = isBack ? { x: 24, y: 8, w: 8, h: 8 } : { x: 8, y: 8, w: 8, h: 8 };
 
-    const headOverlay = isBack
-      ? { x: 56, y: 8, w: 8, h: 8 }
-      : { x: 40, y: 8, w: 8, h: 8 };
+    const headOverlay = isBack ? { x: 56, y: 8, w: 8, h: 8 } : { x: 40, y: 8, w: 8, h: 8 };
 
-    const body = isBack
-      ? { x: 32, y: 20, w: 8, h: 12 }
-      : { x: 20, y: 20, w: 8, h: 12 };
+    const body = isBack ? { x: 32, y: 20, w: 8, h: 12 } : { x: 20, y: 20, w: 8, h: 12 };
 
     const rightArm = isBack
       ? { x: 52, y: 20, w: armWidth, h: 12 }
@@ -1956,61 +1937,57 @@ function drawMinecraftSkin(canvas, skinSource, options = {}) {
       ? { x: 44, y: 52, w: armWidth, h: 12 }
       : { x: 36, y: 52, w: armWidth, h: 12 };
 
-    const rightLeg = isBack
-      ? { x: 12, y: 20, w: 4, h: 12 }
-      : { x: 4, y: 20, w: 4, h: 12 };
+    const rightLeg = isBack ? { x: 12, y: 20, w: 4, h: 12 } : { x: 4, y: 20, w: 4, h: 12 };
 
-    const leftLeg = isBack
-      ? { x: 28, y: 52, w: 4, h: 12 }
-      : { x: 20, y: 52, w: 4, h: 12 };
+    const leftLeg = isBack ? { x: 28, y: 52, w: 4, h: 12 } : { x: 20, y: 52, w: 4, h: 12 };
 
     drawSkinPart(context, image, face, {
       x: originX + 6 * unit,
       y: originY,
       w: 8 * unit,
-      h: 8 * unit
+      h: 8 * unit,
     });
 
     drawSkinPart(context, image, headOverlay, {
       x: originX + 6 * unit,
       y: originY,
       w: 8 * unit,
-      h: 8 * unit
+      h: 8 * unit,
     });
 
     drawSkinPart(context, image, body, {
       x: originX + 6 * unit,
       y: originY + 8 * unit,
       w: 8 * unit,
-      h: 12 * unit
+      h: 12 * unit,
     });
 
     drawSkinPart(context, image, rightArm, {
       x: originX + (6 - armWidth) * unit,
       y: originY + 8 * unit,
       w: armWidth * unit,
-      h: 12 * unit
+      h: 12 * unit,
     });
 
     drawSkinPart(context, image, leftArm, {
       x: originX + 14 * unit,
       y: originY + 8 * unit,
       w: armWidth * unit,
-      h: 12 * unit
+      h: 12 * unit,
     });
 
     drawSkinPart(context, image, rightLeg, {
       x: originX + 6 * unit,
       y: originY + 20 * unit,
       w: 4 * unit,
-      h: 12 * unit
+      h: 12 * unit,
     });
 
     drawSkinPart(context, image, leftLeg, {
       x: originX + 10 * unit,
       y: originY + 20 * unit,
       w: 4 * unit,
-      h: 12 * unit
+      h: 12 * unit,
     });
   };
 
@@ -2043,7 +2020,7 @@ function setupSkinViewerCanvas(canvas, skinSource, capeSource = "", options = {}
     width: canvas.width,
     height: canvas.height,
     skin: skinSource || DEFAULT_STEVE_SKIN,
-    cape: capeSource || undefined
+    cape: capeSource || undefined,
   });
 
   viewer.background = null;
@@ -2075,7 +2052,7 @@ function updateSkinEditorViewer() {
   skinEditorViewer = null;
 
   const capeId = selectedSkinEditorCapeId();
-  const cape = getAvailableCapes().find(item => item.id === capeId);
+  const cape = getAvailableCapes().find((item) => item.id === capeId);
   const capeUrl = cape?.url || "";
 
   skinEditorViewer = setupSkinViewerCanvas(
@@ -2083,7 +2060,7 @@ function updateSkinEditorViewer() {
     state.skins.editorImageDataUrl || DEFAULT_STEVE_SKIN,
     capeUrl,
     {
-      model: selectedSkinEditorModel()
+      model: selectedSkinEditorModel(),
     }
   );
 }
@@ -2103,13 +2080,13 @@ function updateCurrentSkinViewer() {
     currentSkin?.url || DEFAULT_STEVE_SKIN,
     currentCape?.url || "",
     {
-      model: currentSkin?.variant === "SLIM" || currentSkin?.variant === "slim" ? "slim" : "wide"
+      model: currentSkin?.variant === "SLIM" || currentSkin?.variant === "slim" ? "slim" : "wide",
     }
   );
 }
 
 function getSelectedLibrarySkin() {
-  return state.skins.library.find(skin => skin.id === state.skins.selectedSkinId) || null;
+  return state.skins.library.find((skin) => skin.id === state.skins.selectedSkinId) || null;
 }
 
 function updateSelectedSkinViewer() {
@@ -2120,14 +2097,14 @@ function updateSelectedSkinViewer() {
   selectedSkinViewer = null;
 
   const selectedSkin = getSelectedLibrarySkin();
-  const selectedCape = getAvailableCapes().find(cape => cape.id === selectedSkin?.capeId);
+  const selectedCape = getAvailableCapes().find((cape) => cape.id === selectedSkin?.capeId);
 
   selectedSkinViewer = setupSkinViewerCanvas(
     canvas,
     getSkinSourceFromEntry(selectedSkin) || DEFAULT_STEVE_SKIN,
     selectedCape?.url || "",
     {
-      model: selectedSkin?.model || "wide"
+      model: selectedSkin?.model || "wide",
     }
   );
 }
@@ -2193,10 +2170,7 @@ function drawCapeTextureFront(canvas, capeUrl, selected = false) {
     const sourceWidth = 10;
     const sourceHeight = 16;
 
-    const scale = Math.floor(Math.min(
-      canvas.width / sourceWidth,
-      canvas.height / sourceHeight
-    ));
+    const scale = Math.floor(Math.min(canvas.width / sourceWidth, canvas.height / sourceHeight));
 
     const targetWidth = sourceWidth * scale;
     const targetHeight = sourceHeight * scale;
@@ -2231,20 +2205,12 @@ function drawCapeTextureFront(canvas, capeUrl, selected = false) {
 }
 
 function drawAllCapePreviews() {
-  $$("[data-cape-url]").forEach(canvas => {
-    drawCapeTextureFront(
-      canvas,
-      canvas.dataset.capeUrl || "",
-      canvas.dataset.selected === "true"
-    );
+  $$("[data-cape-url]").forEach((canvas) => {
+    drawCapeTextureFront(canvas, canvas.dataset.capeUrl || "", canvas.dataset.selected === "true");
   });
 
-  $$("[data-cape-preview]").forEach(canvas => {
-    drawCapePlaceholder(
-      canvas,
-      canvas.dataset.capeName || "",
-      canvas.dataset.selected === "true"
-    );
+  $$("[data-cape-preview]").forEach((canvas) => {
+    drawCapePlaceholder(canvas, canvas.dataset.capeName || "", canvas.dataset.selected === "true");
   });
 }
 
@@ -2328,7 +2294,9 @@ function renderSkinPage() {
             <span class="whitetext mcr">New skin</span>
           </button>
 
-          ${library.map(skin => `
+          ${library
+            .map(
+              (skin) => `
             <div class="skin-library-card" data-skin-id="${escapeHtml(skin.id)}">
               <p class="skin-card-title whitetext mcr">${escapeHtml(skin.name || "Skin")}</p>
               <div class="skin-card-preview-wrap">
@@ -2341,7 +2309,9 @@ function renderSkinPage() {
                 <button class="mcbtn skin-card-action danger" data-action="delete" type="button">Delete</button>
               </div>
             </div>
-          `).join("")}
+          `
+            )
+            .join("")}
         </div>
       </section>
     </div>
@@ -2352,7 +2322,7 @@ function renderSkinPage() {
   const currentCanvas = $("#currentSkinCanvas");
 
   if (currentCanvas) {
-    currentCanvas.addEventListener("mousedown", event => {
+    currentCanvas.addEventListener("mousedown", (event) => {
       state.skins.previewDragging = true;
       state.skins.previewDragStartX = event.clientX;
       state.skins.previewDragStartRotation = state.skins.previewRotation;
@@ -2362,9 +2332,9 @@ function renderSkinPage() {
   document.addEventListener("mousemove", handleSkinPreviewMouseMove);
   document.addEventListener("mouseup", handleSkinPreviewMouseUp);
 
-  $$(".skin-library-card[data-skin-id]").forEach(card => {
+  $$(".skin-library-card[data-skin-id]").forEach((card) => {
     const skinId = card.dataset.skinId;
-    const skin = library.find(item => item.id === skinId);
+    const skin = library.find((item) => item.id === skinId);
     const canvas = card.querySelector(".skin-card-canvas");
 
     if (canvas) {
@@ -2372,27 +2342,27 @@ function renderSkinPage() {
         drawMinecraftSkin(canvas, getSkinPreviewSource(skin), {
           model: skin?.model || "wide",
           rotation: 0,
-          animate: false
+          animate: false,
         });
       });
     }
 
-    card.querySelector('[data-action="use"]')?.addEventListener("click", async event => {
+    card.querySelector('[data-action="use"]')?.addEventListener("click", async (event) => {
       event.stopPropagation();
       await useSkinFromLibrary(skinId);
     });
 
-    card.querySelector('[data-action="edit"]')?.addEventListener("click", event => {
+    card.querySelector('[data-action="edit"]')?.addEventListener("click", (event) => {
       event.stopPropagation();
       openSkinEditor(skinId);
     });
 
-    card.querySelector('[data-action="duplicate"]')?.addEventListener("click", async event => {
+    card.querySelector('[data-action="duplicate"]')?.addEventListener("click", async (event) => {
       event.stopPropagation();
       await duplicateSkinInLibrary(skinId);
     });
 
-    card.querySelector('[data-action="delete"]')?.addEventListener("click", async event => {
+    card.querySelector('[data-action="delete"]')?.addEventListener("click", async (event) => {
       event.stopPropagation();
       await deleteSkinFromLibrary(skinId);
     });
@@ -2443,7 +2413,7 @@ async function loadSkinPageData(force = false) {
   try {
     const [minecraftProfile, library] = await Promise.all([
       window.launcherAPI.skins.getMinecraftProfile(),
-      window.launcherAPI.skins.list()
+      window.launcherAPI.skins.list(),
     ]);
 
     state.skins.minecraftProfile = minecraftProfile;
@@ -2478,7 +2448,7 @@ async function addCurrentSkinToLibrary() {
       model: currentSkin.variant === "SLIM" || currentSkin.variant === "slim" ? "slim" : "wide",
       skinDataUrl: dataUrl || "",
       sourceUrl: currentSkin.url || "",
-      capeId: getActiveCapeFromMinecraftProfile()?.id || ""
+      capeId: getActiveCapeFromMinecraftProfile()?.id || "",
     });
 
     await loadSkinPageData(true);
@@ -2488,7 +2458,7 @@ async function addCurrentSkinToLibrary() {
 }
 
 function openSkinEditor(skinId = null) {
-  const existing = state.skins.library.find(skin => skin.id === skinId) || null;
+  const existing = state.skins.library.find((skin) => skin.id === skinId) || null;
 
   state.skins.editorOpen = true;
   state.skins.editorSkinId = skinId;
@@ -2547,16 +2517,20 @@ function renderSkinEditorCapeOptions(selectedCapeId = "") {
       <span class="whitetext mcr">No cape</span>
     </label>
 
-    ${capes.map(cape => `
+    ${capes
+      .map(
+        (cape) => `
       <label class="skin-cape-option">
         <input type="radio" name="skinEditorCape" value="${escapeHtml(cape.id)}" ${cape.id === selectedCapeId ? "checked" : ""} />
         ${renderCapePreviewHtml(cape, selectedCapeId)}
         <span class="whitetext mcr">${escapeHtml(cape.name)}</span>
       </label>
-    `).join("")}
+    `
+      )
+      .join("")}
   `;
 
-  root.querySelectorAll('input[name="skinEditorCape"]').forEach(input => {
+  root.querySelectorAll('input[name="skinEditorCape"]').forEach((input) => {
     input.addEventListener("change", () => {
       renderSkinEditorCapeOptions(selectedSkinEditorCapeId());
       updateSkinEditorViewer();
@@ -2634,7 +2608,7 @@ function bindSkinPainterEvents() {
     context.fillRect(x * 8, y * 8, 8, 8);
   }
 
-  canvas.addEventListener("mousedown", event => {
+  canvas.addEventListener("mousedown", (event) => {
     drawing = true;
     paint(event);
   });
@@ -2683,20 +2657,20 @@ async function saveSkinEditor(useAfterSave = false) {
         name,
         model,
         capeId,
-        skinDataUrl: state.skins.editorImageDataUrl
+        skinDataUrl: state.skins.editorImageDataUrl,
       });
     } else {
       saved = await window.launcherAPI.skins.create({
         name,
         model,
         capeId,
-        skinDataUrl: state.skins.editorImageDataUrl
+        skinDataUrl: state.skins.editorImageDataUrl,
       });
     }
 
     if (useAfterSave) {
       await window.launcherAPI.skins.use(saved.id, {
-        capeId
+        capeId,
       });
 
       refreshLoginCardHeadAfterSkinChange();
@@ -2747,7 +2721,7 @@ async function duplicateSkinInLibrary(skinId) {
 }
 
 async function deleteSkinFromLibrary(skinId) {
-  const skin = state.skins.library.find(item => item.id === skinId);
+  const skin = state.skins.library.find((item) => item.id === skinId);
   const confirmed = confirm(`Delete skin "${skin?.name || "Skin"}"?`);
 
   if (!confirmed) return;
@@ -2775,7 +2749,7 @@ function initSkinEditorEvents() {
 
   const backdrop = $("#skinEditorBackdrop");
   if (backdrop) {
-    backdrop.addEventListener("click", event => {
+    backdrop.addEventListener("click", (event) => {
       if (event.target === backdrop) {
         closeSkinEditor();
       }
@@ -2789,12 +2763,12 @@ function getDroppedJarPaths(event) {
   if (window.launcherAPI?.mods?.getDroppedFilePaths) {
     return window.launcherAPI.mods
       .getDroppedFilePaths(files)
-      .filter(filePath => filePath.toLowerCase().endsWith(".jar"));
+      .filter((filePath) => filePath.toLowerCase().endsWith(".jar"));
   }
 
   return files
-    .filter(file => file.name.toLowerCase().endsWith(".jar"))
-    .map(file => file.path)
+    .filter((file) => file.name.toLowerCase().endsWith(".jar"))
+    .map((file) => file.path)
     .filter(Boolean);
 }
 
@@ -2812,9 +2786,7 @@ async function loadSingleServerStatus(element) {
   element.classList.remove("offline");
 
   try {
-    const response = await fetch(
-      `https://api.mcsrvstat.us/3/${encodeURIComponent(address)}`
-    );
+    const response = await fetch(`https://api.mcsrvstat.us/3/${encodeURIComponent(address)}`);
 
     if (!response.ok) {
       throw new Error(`Server status API returned ${response.status}`);
@@ -2842,9 +2814,7 @@ async function loadSingleServerStatus(element) {
 async function loadServerStatuses() {
   const serverElements = $$('[id^="server:"]');
 
-  await Promise.all(
-    serverElements.map(element => loadSingleServerStatus(element))
-  );
+  await Promise.all(serverElements.map((element) => loadSingleServerStatus(element)));
 }
 
 async function syncDefaultClient(mode, force = true) {
@@ -2869,7 +2839,7 @@ async function syncDefaultClient(mode, force = true) {
 
     await window.launcherAPI.clientUpdater.syncDefault({
       mode,
-      force
+      force,
     });
 
     await loadProfiles();
@@ -2885,7 +2855,9 @@ async function checkDefaultClientInfoManually() {
     const info = await window.launcherAPI.clientUpdater.getDefaultInfo();
 
     if (!info.updateAvailable) {
-      setUpdateStatus(`Default client is up to date. Version: ${info.remoteClientVersion || "unknown"}`);
+      setUpdateStatus(
+        `Default client is up to date. Version: ${info.remoteClientVersion || "unknown"}`
+      );
       setStatus("Default client is already up to date.");
       return;
     }
@@ -3013,11 +2985,11 @@ function initNewsTabs() {
   const minecraftFrame = $("#minecraftNewsFrame");
   const launcherFrame = $("#launcherNewsFrame");
 
-  newsTabButtons.forEach(button => {
+  newsTabButtons.forEach((button) => {
     button.addEventListener("click", () => {
       const tab = button.dataset.newsTab;
 
-      newsTabButtons.forEach(btn => {
+      newsTabButtons.forEach((btn) => {
         btn.classList.toggle("active", btn.dataset.newsTab === tab);
       });
 
@@ -3178,7 +3150,7 @@ async function initEvents() {
   ensureEditorExtraControls();
   initLauncherSettingsEvents();
 
-  document.addEventListener("click", event => {
+  document.addEventListener("click", (event) => {
     const dropup = $("#profileDropup");
 
     if (dropup && !dropup.contains(event.target)) {
@@ -3202,13 +3174,13 @@ async function initEvents() {
 
   const profileDropupButton = $("#profileDropupButton");
   if (profileDropupButton) {
-    profileDropupButton.addEventListener("click", event => {
+    profileDropupButton.addEventListener("click", (event) => {
       event.stopPropagation();
       toggleProfileDropup();
     });
   }
 
-  $$(".nav-btn").forEach(button => {
+  $$(".nav-btn").forEach((button) => {
     button.addEventListener("click", () => showPage(button.dataset.page));
   });
 
@@ -3223,12 +3195,15 @@ async function initEvents() {
 
   const installationEditorBackdrop = $("#installationEditorBackdrop");
   if (installationEditorBackdrop) {
-    installationEditorBackdrop.addEventListener("mousedown", event => {
+    installationEditorBackdrop.addEventListener("mousedown", (event) => {
       state.installationBackdropMouseDownOnBackdrop = event.target === installationEditorBackdrop;
     });
 
-    installationEditorBackdrop.addEventListener("click", event => {
-      if (state.installationBackdropMouseDownOnBackdrop && event.target === installationEditorBackdrop) {
+    installationEditorBackdrop.addEventListener("click", (event) => {
+      if (
+        state.installationBackdropMouseDownOnBackdrop &&
+        event.target === installationEditorBackdrop
+      ) {
         closeInstallationEditor();
       }
 
@@ -3236,7 +3211,7 @@ async function initEvents() {
     });
   }
 
-  $$(".editor-tab-btn").forEach(button => {
+  $$(".editor-tab-btn").forEach((button) => {
     button.addEventListener("click", () => {
       showEditorTab(button.dataset.editorTab);
     });
@@ -3386,8 +3361,8 @@ async function initEvents() {
 
   const editorModsDropZone = $("#editorModsDropZone");
   if (editorModsDropZone) {
-    ["dragenter", "dragover"].forEach(eventName => {
-      editorModsDropZone.addEventListener(eventName, event => {
+    ["dragenter", "dragover"].forEach((eventName) => {
+      editorModsDropZone.addEventListener(eventName, (event) => {
         event.preventDefault();
         event.stopPropagation();
         event.dataTransfer.dropEffect = "copy";
@@ -3395,15 +3370,15 @@ async function initEvents() {
       });
     });
 
-    ["dragleave", "dragend"].forEach(eventName => {
-      editorModsDropZone.addEventListener(eventName, event => {
+    ["dragleave", "dragend"].forEach((eventName) => {
+      editorModsDropZone.addEventListener(eventName, (event) => {
         event.preventDefault();
         event.stopPropagation();
         editorModsDropZone.classList.remove("drag-over");
       });
     });
 
-    editorModsDropZone.addEventListener("drop", async event => {
+    editorModsDropZone.addEventListener("drop", async (event) => {
       event.preventDefault();
       event.stopPropagation();
       editorModsDropZone.classList.remove("drag-over");
@@ -3474,7 +3449,7 @@ async function initEvents() {
             showPage("console");
           }, 650);
         }
-wrongJavaVersionCrashDetected = false;
+        wrongJavaVersionCrashDetected = false;
         const result = await window.launcherAPI.launcher.launch(selectedProfile.id);
 
         finishLaunchProgress();
@@ -3507,7 +3482,8 @@ wrongJavaVersionCrashDetected = false;
   const newProfileBtn = $("#newProfileBtn");
   if (newProfileBtn) {
     newProfileBtn.addEventListener("click", async () => {
-      const latestRelease = state.minecraftVersions.find(version => version.type === "release")?.id || "1.21.1";
+      const latestRelease =
+        state.minecraftVersions.find((version) => version.type === "release")?.id || "1.21.1";
 
       const created = await window.launcherAPI.profiles.create({
         name: "New Custom Installation",
@@ -3516,7 +3492,7 @@ wrongJavaVersionCrashDetected = false;
         loaderType: "vanilla",
         minMemory: "2G",
         maxMemory: "4G",
-        icon: "grass"
+        icon: "grass",
       });
 
       await loadProfiles();
@@ -3617,7 +3593,7 @@ wrongJavaVersionCrashDetected = false;
     });
   }
 
-  window.launcherAPI.events.onGameLog(line => {
+  window.launcherAPI.events.onGameLog((line) => {
     appendConsole(line);
 
     if (isWrongJavaVersionCrashLine(line)) {
@@ -3625,7 +3601,7 @@ wrongJavaVersionCrashDetected = false;
     }
   });
 
-  window.launcherAPI.events.onGameClose(data => {
+  window.launcherAPI.events.onGameClose((data) => {
     setStatus(`Minecraft closed with code ${data.code}.`);
     appendConsole(`[launcher] Minecraft closed with code ${data.code}.`);
 
@@ -3637,9 +3613,9 @@ wrongJavaVersionCrashDetected = false;
     }
 
     loadDiscordStatus();
-});
+  });
 
-  window.launcherAPI.events.onUpdaterStatus(data => {
+  window.launcherAPI.events.onUpdaterStatus((data) => {
     const downloadBtn = $("#downloadUpdateBtn");
     const installBtn = $("#installUpdateBtn");
 
@@ -3679,7 +3655,7 @@ wrongJavaVersionCrashDetected = false;
     }
   });
 
-  window.launcherAPI.events.onClientUpdaterStatus(data => {
+  window.launcherAPI.events.onClientUpdaterStatus((data) => {
     const message = data.message || "";
 
     if (data.type === "checking") {
@@ -3754,11 +3730,11 @@ wrongJavaVersionCrashDetected = false;
   });
 }
 
-window.addEventListener("dragover", event => {
+window.addEventListener("dragover", (event) => {
   event.preventDefault();
 });
 
-window.addEventListener("drop", event => {
+window.addEventListener("drop", (event) => {
   event.preventDefault();
 });
 async function boot() {
@@ -3778,7 +3754,7 @@ async function boot() {
   appendConsole("[launcher] Renderer loaded.");
 }
 
-boot().catch(error => {
+boot().catch((error) => {
   console.error(error);
   setStatus(error.message || "Launcher failed to start.");
   alert(error.message || "Launcher failed to start.");

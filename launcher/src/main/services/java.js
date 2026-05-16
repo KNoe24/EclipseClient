@@ -55,8 +55,8 @@ function readDirs(root) {
 
     return fs
       .readdirSync(root, { withFileTypes: true })
-      .filter(entry => entry.isDirectory())
-      .map(entry => path.join(root, entry.name));
+      .filter((entry) => entry.isDirectory())
+      .map((entry) => path.join(root, entry.name));
   } catch {
     return [];
   }
@@ -68,12 +68,13 @@ function findWindowsJavaCandidates() {
     process.env.PROGRAMFILES && path.join(process.env.PROGRAMFILES, "Java"),
     process.env["ProgramFiles(x86)"] && path.join(process.env["ProgramFiles(x86)"], "Java"),
     process.env.PROGRAMFILES && path.join(process.env.PROGRAMFILES, "Eclipse Adoptium"),
-    process.env["ProgramFiles(x86)"] && path.join(process.env["ProgramFiles(x86)"], "Eclipse Adoptium"),
+    process.env["ProgramFiles(x86)"] &&
+      path.join(process.env["ProgramFiles(x86)"], "Eclipse Adoptium"),
     process.env.PROGRAMFILES && path.join(process.env.PROGRAMFILES, "Microsoft"),
     process.env.PROGRAMFILES && path.join(process.env.PROGRAMFILES, "Amazon Corretto"),
     process.env.PROGRAMFILES && path.join(process.env.PROGRAMFILES, "Zulu"),
     process.env.LOCALAPPDATA && path.join(process.env.LOCALAPPDATA, "Programs", "Eclipse Adoptium"),
-    process.env.APPDATA && path.join(process.env.APPDATA, ".minecraft", "runtime")
+    process.env.APPDATA && path.join(process.env.APPDATA, ".minecraft", "runtime"),
   ].filter(Boolean);
 
   const candidates = [];
@@ -108,7 +109,7 @@ function findMacJavaCandidates() {
 
   const roots = [
     "/Library/Java/JavaVirtualMachines",
-    path.join(process.env.HOME || "", "Library", "Java", "JavaVirtualMachines")
+    path.join(process.env.HOME || "", "Library", "Java", "JavaVirtualMachines"),
   ];
 
   for (const root of roots) {
@@ -151,7 +152,7 @@ function readJavaVersion(javaPath) {
       encoding: "utf8",
       timeout: 3500,
       windowsHide: true,
-      stdio: ["ignore", "pipe", "pipe"]
+      stdio: ["ignore", "pipe", "pipe"],
     });
   } catch (error) {
     const stdout = error.stdout ? String(error.stdout) : "";
@@ -211,9 +212,7 @@ function parseJavaVersion(output, javaPath) {
   const hasJavac = exists(javacInHome(home));
 
   const implementor =
-    release.IMPLEMENTOR ||
-    release.VENDOR ||
-    detectVendorFromText(`${firstLine} ${home}`);
+    release.IMPLEMENTOR || release.VENDOR || detectVendorFromText(`${firstLine} ${home}`);
 
   const kind = hasJavac ? "JDK" : "JRE";
 
@@ -222,7 +221,7 @@ function parseJavaVersion(output, javaPath) {
     major,
     kind,
     implementor,
-    raw: firstLine
+    raw: firstLine,
   };
 }
 
@@ -254,7 +253,7 @@ async function listInstalledJava() {
       kind: parsed.kind,
       implementor: parsed.implementor,
       label: `${parsed.implementor} ${parsed.kind} ${parsed.version} (${candidate})`,
-      raw: parsed.raw
+      raw: parsed.raw,
     });
   }
 
@@ -267,5 +266,5 @@ async function listInstalledJava() {
 }
 
 module.exports = {
-  listInstalledJava
+  listInstalledJava,
 };

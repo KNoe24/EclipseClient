@@ -12,12 +12,12 @@ function safeAccount(account) {
     username: account.username || account.name || "Unknown",
     uuid: account.uuid || account.id || null,
     type: account.type || "microsoft",
-    savedAt: account.savedAt || new Date().toISOString()
+    savedAt: account.savedAt || new Date().toISOString(),
   };
 }
 
 function sleep(ms) {
-  return new Promise(resolve => setTimeout(resolve, ms));
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 function isRetryableNetworkError(error) {
@@ -139,7 +139,7 @@ function normalizeMclcAuth(mclcAuth) {
     clientToken: mclcAuth.client_token || mclcAuth.clientToken || "",
     user_properties: mclcAuth.user_properties || {},
     meta: mclcAuth.meta || { type: "msa" },
-    savedAt: new Date().toISOString()
+    savedAt: new Date().toISOString(),
   };
 }
 
@@ -156,7 +156,7 @@ async function runMicrosoftLogin() {
   const xboxManager = await authManager.launch("electron", {
     width: 900,
     height: 700,
-    resizable: true
+    resizable: true,
   });
 
   console.log("[auth] Xbox login complete. Getting Minecraft token...");
@@ -177,7 +177,7 @@ async function runMicrosoftLogin() {
 
   return {
     ok: true,
-    account: safeAccount(account)
+    account: safeAccount(account),
   };
 }
 
@@ -187,14 +187,14 @@ async function loginMicrosoft() {
   }
 
   loginInProgress = runMicrosoftLogin()
-    .catch(error => {
+    .catch((error) => {
       const message = getReadableError(error);
 
       console.error("[auth] Microsoft login failed:", error);
 
       return {
         ok: false,
-        error: message
+        error: message,
       };
     })
     .finally(() => {
@@ -230,8 +230,8 @@ async function getMinecraftProfile() {
     method: "GET",
     headers: {
       Authorization: `Bearer ${accessToken}`,
-      Accept: "application/json"
-    }
+      Accept: "application/json",
+    },
   });
 
   const text = await response.text();
@@ -256,7 +256,7 @@ async function getMinecraftProfile() {
     id: profile?.id || "",
     name: profile?.name || "",
     skins: Array.isArray(profile?.skins) ? profile.skins : [],
-    capes: Array.isArray(profile?.capes) ? profile.capes : []
+    capes: Array.isArray(profile?.capes) ? profile.capes : [],
   };
 }
 function getLaunchAuth() {
@@ -272,7 +272,7 @@ function getLaunchAuth() {
     uuid: account.uuid,
     name: account.username,
     user_properties: account.user_properties || {},
-    meta: account.meta || { type: "msa" }
+    meta: account.meta || { type: "msa" },
   };
 }
 
@@ -280,7 +280,7 @@ async function logout() {
   storage.writeJson(ACCOUNT_FILE, null);
 
   return {
-    ok: true
+    ok: true,
   };
 }
 
@@ -291,5 +291,5 @@ module.exports = {
   getMinecraftAccessToken,
   getMinecraftProfile,
   getLaunchAuth,
-  logout
+  logout,
 };

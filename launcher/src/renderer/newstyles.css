@@ -45,8 +45,7 @@
   --settings-desc-size: clamp(0.72rem, 0.35vw + 0.62rem, 0.8rem);
 
   --block-shadow:
-    0 0.25rem 0 0 rgba(255, 255, 255, 0.137) inset,
-    0 -0.25rem 0 0 rgba(0, 0, 0, 0.241) inset,
+    0 0.25rem 0 0 rgba(255, 255, 255, 0.137) inset, 0 -0.25rem 0 0 rgba(0, 0, 0, 0.241) inset,
     0.3125rem 0.3125rem 2.25rem #0000001a;
 }
 
@@ -967,7 +966,7 @@ canvas {
   overflow-x: hidden;
   max-height: calc(100vh - clamp(7rem, 15vh, 10rem));
   padding: 0.15rem clamp(0.8rem, 1.4vw, 1rem) 0.8rem 0.15rem;
-  
+
   box-sizing: border-box;
   width: calc(100% - (var(--page-pad) * 2));
   max-width: calc(100% - (var(--page-pad) * 2));
@@ -1250,7 +1249,7 @@ canvas {
   background: transparent;
   cursor: pointer;
   overflow: visible;
-  
+
   align-self: center;
   justify-self: center;
 }
@@ -1272,7 +1271,9 @@ canvas {
   width: clamp(1.6rem, 3.1vw, 2.125rem);
   height: clamp(1.6rem, 3.1vw, 2.125rem);
 
-  margin-top: calc((clamp(0.55rem, 1.2vw, 0.75rem) - clamp(1.6rem, 3.1vw, 2.125rem)) / 2 - 0.125rem);
+  margin-top: calc(
+    (clamp(0.55rem, 1.2vw, 0.75rem) - clamp(1.6rem, 3.1vw, 2.125rem)) / 2 - 0.125rem
+  );
 
   background: #d7d7d7;
   border: clamp(0.1875rem, 0.45vw, 0.25rem) solid var(--border-dark);
@@ -1320,7 +1321,8 @@ canvas {
   gap: clamp(0.6rem, 1.4vw, 1rem);
 
   min-height: clamp(4.8rem, 8.5vh, 6rem);
-  margin: var(--page-pad) clamp(0.45rem, 1vw, 0.75rem) clamp(0.8rem, 1.6vw, 1.125rem) var(--page-pad);
+  margin: var(--page-pad) clamp(0.45rem, 1vw, 0.75rem) clamp(0.8rem, 1.6vw, 1.125rem)
+    var(--page-pad);
 
   overflow: visible;
   min-width: 0;
@@ -1396,8 +1398,7 @@ canvas {
 .installation-icon-cube {
   width: clamp(4rem, 7vw, 5.25rem);
   height: clamp(4rem, 7vw, 5.25rem);
-  background:
-    linear-gradient(135deg, #6a6a6a 0%, #3a3a3a 45%, #1f1f1f 100%);
+  background: linear-gradient(135deg, #6a6a6a 0%, #3a3a3a 45%, #1f1f1f 100%);
   border: 0.125rem solid var(--border-dark);
   box-shadow:
     0 0.25rem 0 rgba(255, 255, 255, 0.137) inset,
@@ -2025,7 +2026,7 @@ select.editor-input {
   background: #303030 !important;
   border-bottom: 0 !important;
   padding: 0.75rem 4rem 0.5rem 1rem !important;
-    position: relative !important;
+  position: relative !important;
   padding-right: 5rem !important;
 }
 
@@ -2052,18 +2053,14 @@ select.editor-input {
     transform 0.1s;
   font-family: "Minecraft-Ten", sans-serif !important;
 
-
-    position: absolute !important;
+  position: absolute !important;
   top: 50% !important;
   right: 1rem !important;
-
-
 
   display: flex !important;
   align-items: center !important;
   justify-content: center !important;
 }
-
 
 .skin-editor-x:hover {
   box-shadow:
@@ -2081,7 +2078,6 @@ select.editor-input {
     0 -6.25rem 0 0 rgba(0, 0, 0, 0.241) inset,
     0.3125rem 0.3125rem 2.25rem #0000001a;
 }
-
 
 .skin-editor-window-body {
   flex: 1 !important;
@@ -2370,18 +2366,18 @@ select.editor-input {
     grid-column: 2;
   }
 
-.skin-editor-window-body {
-  grid-template-columns: 1fr !important;
-  overflow-y: auto !important;
-  scrollbar-width: none !important;
-  -ms-overflow-style: none !important;
-}
+  .skin-editor-window-body {
+    grid-template-columns: 1fr !important;
+    overflow-y: auto !important;
+    scrollbar-width: none !important;
+    -ms-overflow-style: none !important;
+  }
 
-.skin-editor-window-body::-webkit-scrollbar {
-  width: 0 !important;
-  height: 0 !important;
-  display: none !important;
-}
+  .skin-editor-window-body::-webkit-scrollbar {
+    width: 0 !important;
+    height: 0 !important;
+    display: none !important;
+  }
 
   .skin-editor-right-form {
     max-width: none !important;
@@ -2569,10 +2565,7 @@ select.editor-input {
   width: 100%;
   box-sizing: border-box;
 
-  padding:
-    clamp(5rem, 10vh, 6.5rem)
-    clamp(1rem, 2vw, 1.5rem)
-    clamp(1rem, 2vw, 1.5rem);
+  padding: clamp(5rem, 10vh, 6.5rem) clamp(1rem, 2vw, 1.5rem) clamp(1rem, 2vw, 1.5rem);
 
   display: grid;
   grid-template-columns: minmax(16rem, 0.82fr) minmax(0, 1.65fr);

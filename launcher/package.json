@@ -14,7 +14,9 @@
     "build:linux": "electron-builder --linux AppImage",
     "dist": "electron-builder",
     "push": "node scripts/git-push.js --start",
-    "push:p": "node scripts/git-push.js"
+    "push:p": "node scripts/git-push.js",
+    "format": "prettier . --write",
+    "format:check": "prettier . --check"
   },
   "dependencies": {
     "discord-rpc": "4.0.1",
@@ -25,7 +27,8 @@
   },
   "devDependencies": {
     "electron": "35.0.0",
-    "electron-builder": "25.1.8"
+    "electron-builder": "25.1.8",
+    "prettier": "^3.8.3"
   },
   "build": {
     "appId": "cc.wawe.knoe24.eclipseclient",
@@ -34,11 +37,11 @@
       "output": "dist",
       "buildResources": "build"
     },
-"files": [
-  "src/**/*",
-  "node_modules/skinview3d/bundles/**/*",
-  "package.json"
-],
+    "files": [
+      "src/**/*",
+      "node_modules/skinview3d/bundles/**/*",
+      "package.json"
+    ],
     "win": {
       "target": "nsis",
       "icon": "build/icon.ico"

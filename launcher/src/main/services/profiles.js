@@ -6,33 +6,29 @@ const { URL } = require("url");
 const storage = require("./storage");
 
 const PROFILES_FILE = "profiles.json";
-const MINECRAFT_VERSION_MANIFEST_URL = "https://launchermeta.mojang.com/mc/game/version_manifest_v2.json";
+const MINECRAFT_VERSION_MANIFEST_URL =
+  "https://launchermeta.mojang.com/mc/game/version_manifest_v2.json";
 const MINECRAFT_VERSION_MANIFEST_CACHE_MS = 5 * 60 * 1000;
 
 let minecraftVersionManifestCache = null;
 let minecraftVersionManifestCacheAt = 0;
 
-const DEFAULT_INSTALLATION_ICON_IDS = [
-  "grass",
-  "dirt",
-  "stone",
-  "diamond",
-  "crafting",
-  "furnace"
-];
+const DEFAULT_INSTALLATION_ICON_IDS = ["grass", "dirt", "stone", "diamond", "crafting", "furnace"];
 
 function id() {
   return crypto.randomBytes(12).toString("hex");
 }
 
 function safeFolderName(name) {
-  return String(name || "Installation")
-    .trim()
-    .replace(/[<>:"/\\|?*\x00-\x1F]/g, "_")
-    .replace(/\s+/g, "_")
-    .replace(/_+/g, "_")
-    .replace(/^_+|_+$/g, "")
-    .slice(0, 60) || "Installation";
+  return (
+    String(name || "Installation")
+      .trim()
+      .replace(/[<>:"/\\|?*\x00-\x1F]/g, "_")
+      .replace(/\s+/g, "_")
+      .replace(/_+/g, "_")
+      .replace(/^_+|_+$/g, "")
+      .slice(0, 60) || "Installation"
+  );
 }
 
 function getProfilesRootDir() {
@@ -66,10 +62,10 @@ function uniqueProfileGameDir(name, existingProfiles = [], ignoreProfileId = nul
 
   const used = new Set(
     existingProfiles
-      .filter(profile => profile.id !== ignoreProfileId)
-      .map(profile => profile.gameDir)
+      .filter((profile) => profile.id !== ignoreProfileId)
+      .map((profile) => profile.gameDir)
       .filter(Boolean)
-      .map(dir => path.resolve(dir))
+      .map((dir) => path.resolve(dir))
   );
 
   let index = 1;
@@ -84,17 +80,22 @@ function uniqueProfileGameDir(name, existingProfiles = [], ignoreProfileId = nul
   return finalDir;
 }
 
-function uniqueManagedProfileGameDirForRename(name, profileId, existingProfiles = [], currentDir = "") {
+function uniqueManagedProfileGameDirForRename(
+  name,
+  profileId,
+  existingProfiles = [],
+  currentDir = ""
+) {
   const root = getProfilesRootDir();
   const base = safeFolderName(name);
   const currentResolved = normalizePathForCompare(currentDir);
 
   const used = new Set(
     existingProfiles
-      .filter(profile => profile.id !== profileId)
-      .map(profile => profile.gameDir)
+      .filter((profile) => profile.id !== profileId)
+      .map((profile) => profile.gameDir)
       .filter(Boolean)
-      .map(dir => path.resolve(dir))
+      .map((dir) => path.resolve(dir))
   );
 
   let index = 1;
@@ -143,9 +144,9 @@ function defaultProfilesFile() {
         icon: "grass",
         iconPath: "",
         createdAt: now,
-        updatedAt: now
-      }
-    ]
+        updatedAt: now,
+      },
+    ],
   };
 }
 
@@ -153,7 +154,7 @@ function normalizeProfile(profile) {
   const normalized = {
     ...profile,
     icon: profile.icon || "grass",
-    iconPath: profile.iconPath || ""
+    iconPath: profile.iconPath || "",
   };
 
   if (!DEFAULT_INSTALLATION_ICON_IDS.includes(normalized.icon) && normalized.icon !== "custom") {
@@ -175,13 +176,13 @@ function normalizeProfilesData(data) {
       ? data.profiles.map(normalizeProfile)
       : fallback.profiles;
 
-  const selectedProfileId = profiles.some(profile => profile.id === data?.selectedProfileId)
+  const selectedProfileId = profiles.some((profile) => profile.id === data?.selectedProfileId)
     ? data.selectedProfileId
     : profiles[0].id;
 
   return {
     selectedProfileId,
-    profiles
+    profiles,
   };
 }
 
@@ -220,14 +221,14 @@ function withComputedProfileFields(profile) {
 
   return {
     ...normalized,
-    customIconDataUrl: normalized.icon === "custom" ? iconDataUrlFor(normalized.iconPath) : ""
+    customIconDataUrl: normalized.icon === "custom" ? iconDataUrlFor(normalized.iconPath) : "",
   };
 }
 
 function withComputedDataFields(data) {
   return {
     selectedProfileId: data.selectedProfileId,
-    profiles: data.profiles.map(withComputedProfileFields)
+    profiles: data.profiles.map(withComputedProfileFields),
   };
 }
 
@@ -258,7 +259,7 @@ async function importProfileIcon(sourcePath) {
   return {
     icon: "custom",
     iconPath: targetPath,
-    customIconDataUrl: iconDataUrlFor(targetPath)
+    customIconDataUrl: iconDataUrlFor(targetPath),
   };
 }
 
@@ -283,17 +284,13 @@ function requestJson(urlString) {
       {
         headers: {
           Accept: "application/json",
-          "User-Agent": "eclipse-client/1.0"
-        }
+          "User-Agent": "eclipse-client/1.0",
+        },
       },
-      response => {
+      (response) => {
         const statusCode = response.statusCode || 0;
 
-        if (
-          statusCode >= 300 &&
-          statusCode < 400 &&
-          response.headers.location
-        ) {
+        if (statusCode >= 300 && statusCode < 400 && response.headers.location) {
           response.resume();
           const redirectUrl = new URL(response.headers.location, parsedUrl);
           requestJson(redirectUrl.toString()).then(resolve).catch(reject);
@@ -308,7 +305,7 @@ function requestJson(urlString) {
 
         const chunks = [];
 
-        response.on("data", chunk => {
+        response.on("data", (chunk) => {
           chunks.push(chunk);
         });
 
@@ -353,19 +350,19 @@ async function listMinecraftVersions(options = {}) {
   const versions = Array.isArray(manifest?.versions) ? manifest.versions : [];
 
   return versions
-    .filter(version => {
+    .filter((version) => {
       if (version?.type === "release") return true;
       if (includeSnapshots && version?.type === "snapshot") return true;
       return false;
     })
-    .map(version => ({
+    .map((version) => ({
       id: String(version.id || ""),
       type: version.type === "snapshot" ? "snapshot" : "release",
       url: String(version.url || ""),
       time: String(version.time || ""),
-      releaseTime: String(version.releaseTime || "")
+      releaseTime: String(version.releaseTime || ""),
     }))
-    .filter(version => version.id);
+    .filter((version) => version.id);
 }
 
 function guessLoaderFromVersionJson(idValue, json) {
@@ -404,7 +401,7 @@ function readInstalledVersionFromDir(versionsRoot, folderName) {
   if (!fs.existsSync(jsonPath)) {
     const jsonFiles = fs
       .readdirSync(versionDir)
-      .filter(file => file.toLowerCase().endsWith(".json"));
+      .filter((file) => file.toLowerCase().endsWith(".json"));
 
     if (jsonFiles.length === 0) return null;
     jsonPath = path.join(versionDir, jsonFiles[0]);
@@ -425,7 +422,7 @@ function readInstalledVersionFromDir(versionsRoot, folderName) {
       inheritsFrom: json.inheritsFrom || "",
       baseVersion: json.inheritsFrom || versionId,
       loaderType,
-      isVanilla
+      isVanilla,
     };
   } catch {
     return null;
@@ -439,8 +436,8 @@ function listInstalledVersionsInRoot(versionsRoot) {
 
   return fs
     .readdirSync(versionsRoot, { withFileTypes: true })
-    .filter(entry => entry.isDirectory())
-    .map(entry => readInstalledVersionFromDir(versionsRoot, entry.name))
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => readInstalledVersionFromDir(versionsRoot, entry.name))
     .filter(Boolean);
 }
 
@@ -448,11 +445,11 @@ async function listInstalledVersions() {
   const data = readProfilesFile();
 
   const roots = uniquePaths([
-    ...data.profiles.map(profile => {
+    ...data.profiles.map((profile) => {
       if (!profile.gameDir) return "";
       return path.join(profile.gameDir, "versions");
     }),
-    storage.getVersionsDir()
+    storage.getVersionsDir(),
   ]);
 
   const byId = new Map();
@@ -470,7 +467,7 @@ async function listInstalledVersions() {
   entries.sort((a, b) =>
     a.id.localeCompare(b.id, undefined, {
       numeric: true,
-      sensitivity: "base"
+      sensitivity: "base",
     })
   );
 
@@ -559,7 +556,7 @@ async function createProfile(profile = {}) {
     icon: profile.icon || "grass",
     iconPath: profile.iconPath || "",
     createdAt: now,
-    updatedAt: now
+    updatedAt: now,
   };
 
   ensureProfileFolders(newProfile.gameDir);
@@ -573,7 +570,7 @@ async function createProfile(profile = {}) {
 
 async function updateProfile(profileId, patch = {}) {
   const data = readProfilesFile();
-  const profile = data.profiles.find(item => item.id === profileId);
+  const profile = data.profiles.find((item) => item.id === profileId);
 
   if (!profile) {
     throw new Error("Profile not found.");
@@ -598,7 +595,7 @@ async function updateProfile(profileId, patch = {}) {
     "extraJvmArgs",
     "extraMcArgs",
     "icon",
-    "iconPath"
+    "iconPath",
   ];
 
   for (const key of allowed) {
@@ -656,13 +653,13 @@ async function deleteProfile(profileId) {
     throw new Error("You must keep at least one installation.");
   }
 
-  const exists = data.profiles.some(profile => profile.id === profileId);
+  const exists = data.profiles.some((profile) => profile.id === profileId);
 
   if (!exists) {
     throw new Error("Profile not found.");
   }
 
-  data.profiles = data.profiles.filter(profile => profile.id !== profileId);
+  data.profiles = data.profiles.filter((profile) => profile.id !== profileId);
 
   if (data.selectedProfileId === profileId) {
     data.selectedProfileId = data.profiles[0].id;
@@ -674,7 +671,7 @@ async function deleteProfile(profileId) {
 
 async function setSelectedProfile(profileId) {
   const data = readProfilesFile();
-  const exists = data.profiles.some(profile => profile.id === profileId);
+  const exists = data.profiles.some((profile) => profile.id === profileId);
 
   if (!exists) {
     throw new Error("Profile not found.");
@@ -683,17 +680,17 @@ async function setSelectedProfile(profileId) {
   data.selectedProfileId = profileId;
   writeProfilesFile(data);
 
-  return withComputedProfileFields(data.profiles.find(profile => profile.id === profileId));
+  return withComputedProfileFields(data.profiles.find((profile) => profile.id === profileId));
 }
 
 async function getSelectedProfile() {
   const data = readProfilesFile();
-  return data.profiles.find(profile => profile.id === data.selectedProfileId) || data.profiles[0];
+  return data.profiles.find((profile) => profile.id === data.selectedProfileId) || data.profiles[0];
 }
 
 async function getProfileById(profileId) {
   const data = readProfilesFile();
-  const profile = data.profiles.find(item => item.id === profileId);
+  const profile = data.profiles.find((item) => item.id === profileId);
 
   if (!profile) {
     throw new Error("Profile not found.");
@@ -715,5 +712,5 @@ module.exports = {
   importProfileIcon,
   listInstalledVersions,
   listMinecraftVersions,
-  DEFAULT_INSTALLATION_ICON_IDS
+  DEFAULT_INSTALLATION_ICON_IDS,
 };

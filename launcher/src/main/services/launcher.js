@@ -27,21 +27,19 @@ function sendGameClose(window, code) {
 }
 
 function sleepImmediate() {
-  return new Promise(resolve => setImmediate(resolve));
+  return new Promise((resolve) => setImmediate(resolve));
 }
 
 function splitArgs(text) {
   if (!text || typeof text !== "string") return [];
 
-  return (
-    text
-      .match(/(?:[^\s"]+|"[^"]*")+/g)
-      ?.map(arg => arg.replace(/^"|"$/g, "")) || []
-  );
+  return text.match(/(?:[^\s"]+|"[^"]*")+/g)?.map((arg) => arg.replace(/^"|"$/g, "")) || [];
 }
 
 function samePath(a, b) {
-  return path.resolve(String(a || "")).toLowerCase() === path.resolve(String(b || "")).toLowerCase();
+  return (
+    path.resolve(String(a || "")).toLowerCase() === path.resolve(String(b || "")).toLowerCase()
+  );
 }
 
 function uniquePaths(values) {
@@ -126,8 +124,8 @@ function getDirectoryChildren(root) {
 
     return fs
       .readdirSync(root, { withFileTypes: true })
-      .filter(entry => entry.isDirectory())
-      .map(entry => path.join(root, entry.name));
+      .filter((entry) => entry.isDirectory())
+      .map((entry) => path.join(root, entry.name));
   } catch {
     return [];
   }
@@ -150,11 +148,7 @@ async function collectRuntimeSeedRoots() {
   const legacyRoot = storage.getRootDir();
   const officialMinecraftDir = getOfficialMinecraftDir();
 
-  const roots = [
-    legacyRoot,
-    officialMinecraftDir,
-    ...getDirectoryChildren(profilesRoot)
-  ];
+  const roots = [legacyRoot, officialMinecraftDir, ...getDirectoryChildren(profilesRoot)];
 
   try {
     const data = await profileService.listProfiles();
@@ -168,7 +162,7 @@ async function collectRuntimeSeedRoots() {
     // Launch can continue without profile discovery.
   }
 
-  return uniquePaths(roots).filter(root => {
+  return uniquePaths(roots).filter((root) => {
     if (samePath(root, runtimeRoot)) return false;
     if (samePath(root, profilesRoot)) return false;
     return hasRuntimeCache(root);
@@ -205,7 +199,7 @@ function readVersionJsonFromRoot(root, versionId) {
         id: versionId,
         path: expectedPath,
         root,
-        json
+        json,
       };
     }
   }
@@ -215,7 +209,7 @@ function readVersionJsonFromRoot(root, versionId) {
 
     const jsonFile = fs
       .readdirSync(versionDir)
-      .find(file => file.toLowerCase().endsWith(".json"));
+      .find((file) => file.toLowerCase().endsWith(".json"));
 
     if (!jsonFile) return null;
 
@@ -228,7 +222,7 @@ function readVersionJsonFromRoot(root, versionId) {
       id: json.id || versionId,
       path: jsonPath,
       root,
-      json
+      json,
     };
   } catch {
     return null;
@@ -236,10 +230,7 @@ function readVersionJsonFromRoot(root, versionId) {
 }
 
 function findVersionJson(versionId, sourceRoots = []) {
-  const roots = uniquePaths([
-    storage.getRuntimeRootDir(),
-    ...sourceRoots
-  ]);
+  const roots = uniquePaths([storage.getRuntimeRootDir(), ...sourceRoots]);
 
   for (const root of roots) {
     const found = readVersionJsonFromRoot(root, versionId);
@@ -257,8 +248,8 @@ async function collectFilePairs(sourceDir, targetDir, window, label) {
   const stack = [
     {
       source: sourceDir,
-      target: targetDir
-    }
+      target: targetDir,
+    },
   ];
 
   let scannedFiles = 0;
@@ -324,7 +315,7 @@ async function linkOrCopyFile(source, target, allowHardlink = true) {
   if (await pathExists(target)) {
     return {
       copied: false,
-      bytes: 0
+      bytes: 0,
     };
   }
 
@@ -340,7 +331,7 @@ async function linkOrCopyFile(source, target, allowHardlink = true) {
     if (error && error.code === "EEXIST") {
       return {
         copied: false,
-        bytes: 0
+        bytes: 0,
       };
     }
 
@@ -350,7 +341,7 @@ async function linkOrCopyFile(source, target, allowHardlink = true) {
       if (copyError && copyError.code === "EEXIST") {
         return {
           copied: false,
-          bytes: 0
+          bytes: 0,
         };
       }
 
@@ -369,7 +360,7 @@ async function linkOrCopyFile(source, target, allowHardlink = true) {
 
   return {
     copied: true,
-    bytes
+    bytes,
   };
 }
 
@@ -381,7 +372,7 @@ async function copyPairsConcurrently(pairs, window, label, options = {}) {
     return {
       files: 0,
       bytes: 0,
-      skipped: 0
+      skipped: 0,
     };
   }
 
@@ -450,7 +441,7 @@ async function copyPairsConcurrently(pairs, window, label, options = {}) {
   return {
     files: copiedFiles,
     bytes: copiedBytes,
-    skipped: skippedFiles
+    skipped: skippedFiles,
   };
 }
 
@@ -459,7 +450,7 @@ async function copyVersionDirFromRoots(versionId, sourceRoots, window) {
     return {
       files: 0,
       bytes: 0,
-      skipped: 0
+      skipped: 0,
     };
   }
 
@@ -472,30 +463,22 @@ async function copyVersionDirFromRoots(versionId, sourceRoots, window) {
       continue;
     }
 
-    const pairs = await collectFilePairs(
-      sourceDir,
-      targetDir,
-      window,
-      `version ${versionId}`
-    );
+    const pairs = await collectFilePairs(sourceDir, targetDir, window, `version ${versionId}`);
 
     return copyPairsConcurrently(pairs, window, `version ${versionId}`, {
-      allowHardlink: true
+      allowHardlink: true,
     });
   }
 
   return {
     files: 0,
     bytes: 0,
-    skipped: 0
+    skipped: 0,
   };
 }
 
 async function seedNeededVersions(profile, customVersionId, sourceRoots, window) {
-  const idsToSeed = uniquePaths([
-    customVersionId,
-    profile.minecraftVersion
-  ]);
+  const idsToSeed = uniquePaths([customVersionId, profile.minecraftVersion]);
 
   let totalFiles = 0;
   let totalBytes = 0;
@@ -533,7 +516,7 @@ async function seedNeededVersions(profile, customVersionId, sourceRoots, window)
   return {
     files: totalFiles,
     bytes: totalBytes,
-    versionIds: Array.from(discoveredIds)
+    versionIds: Array.from(discoveredIds),
   };
 }
 
@@ -574,7 +557,7 @@ function findAssetIndexInfo(versionChain) {
       return {
         id: String(assetIndex.id),
         url: assetIndex.url || "",
-        sha1: assetIndex.sha1 || ""
+        sha1: assetIndex.sha1 || "",
       };
     }
 
@@ -582,7 +565,7 @@ function findAssetIndexInfo(versionChain) {
       return {
         id: String(item.json.assets),
         url: "",
-        sha1: ""
+        sha1: "",
       };
     }
   }
@@ -595,23 +578,14 @@ async function copyAssetIndexFromRoots(assetIndexId, sourceRoots, window) {
     return null;
   }
 
-  const targetPath = path.join(
-    storage.getRuntimeAssetsDir(),
-    "indexes",
-    `${assetIndexId}.json`
-  );
+  const targetPath = path.join(storage.getRuntimeAssetsDir(), "indexes", `${assetIndexId}.json`);
 
   if (await pathExists(targetPath)) {
     return targetPath;
   }
 
   for (const sourceRoot of sourceRoots) {
-    const sourcePath = path.join(
-      sourceRoot,
-      "assets",
-      "indexes",
-      `${assetIndexId}.json`
-    );
+    const sourcePath = path.join(sourceRoot, "assets", "indexes", `${assetIndexId}.json`);
 
     if (!(await pathExists(sourcePath))) {
       continue;
@@ -637,9 +611,9 @@ async function collectNeededAssetPairs(assetIndexPath, sourceRoots, window) {
   const hashes = Array.from(
     new Set(
       Object.values(indexJson.objects)
-        .map(entry => entry?.hash)
+        .map((entry) => entry?.hash)
         .filter(Boolean)
-        .map(hash => String(hash))
+        .map((hash) => String(hash))
     )
   );
 
@@ -700,7 +674,7 @@ async function seedNeededAssets(assetIndexInfo, sourceRoots, window) {
       files: 0,
       bytes: 0,
       skipped: 0,
-      assetIndexId: null
+      assetIndexId: null,
     };
   }
 
@@ -716,7 +690,7 @@ async function seedNeededAssets(assetIndexInfo, sourceRoots, window) {
       files: 0,
       bytes: 0,
       skipped: 0,
-      assetIndexId: assetIndexInfo.id
+      assetIndexId: assetIndexInfo.id,
     };
   }
 
@@ -727,13 +701,13 @@ async function seedNeededAssets(assetIndexInfo, sourceRoots, window) {
     window,
     `assets for index ${assetIndexInfo.id}`,
     {
-      allowHardlink: true
+      allowHardlink: true,
     }
   );
 
   return {
     ...result,
-    assetIndexId: assetIndexInfo.id
+    assetIndexId: assetIndexInfo.id,
   };
 }
 
@@ -761,7 +735,7 @@ async function seedLibraries(sourceRoots, window) {
       window,
       `libraries from ${path.basename(sourceRoot) || sourceRoot}`,
       {
-        allowHardlink: true
+        allowHardlink: true,
       }
     );
 
@@ -773,7 +747,7 @@ async function seedLibraries(sourceRoots, window) {
   return {
     files: totalFiles,
     bytes: totalBytes,
-    skipped: totalSkipped
+    skipped: totalSkipped,
   };
 }
 
@@ -801,7 +775,7 @@ async function seedCache(sourceRoots, window) {
       window,
       `cache from ${path.basename(sourceRoot) || sourceRoot}`,
       {
-        allowHardlink: true
+        allowHardlink: true,
       }
     );
 
@@ -813,7 +787,7 @@ async function seedCache(sourceRoots, window) {
   return {
     files: totalFiles,
     bytes: totalBytes,
-    skipped: totalSkipped
+    skipped: totalSkipped,
   };
 }
 
@@ -877,7 +851,7 @@ async function seedSharedRuntimeCaches(profile, customVersionId, window) {
           files: 0,
           bytes: 0,
           runtimeRoot,
-          sources: []
+          sources: [],
         },
         null,
         2
@@ -902,11 +876,7 @@ async function seedSharedRuntimeCaches(profile, customVersionId, window) {
   totalBytes += versionResult.bytes;
 
   const versionChain = getVersionChain(
-    uniquePaths([
-      customVersionId,
-      profile.minecraftVersion,
-      ...versionResult.versionIds
-    ]),
+    uniquePaths([customVersionId, profile.minecraftVersion, ...versionResult.versionIds]),
     sourceRoots
   );
 
@@ -940,7 +910,7 @@ async function seedSharedRuntimeCaches(profile, customVersionId, window) {
         runtimeRoot,
         assetIndexId: assetResult.assetIndexId || null,
         versionIds: versionResult.versionIds || [],
-        sources: sourceRoots
+        sources: sourceRoots,
       },
       null,
       2
@@ -971,10 +941,10 @@ function copyMatchingJarIfPresent(sourceJsonPath, versionId, json, versionsRoot)
 
   const candidates = [
     path.join(sourceDir, `${versionId}.jar`),
-    json.id ? path.join(sourceDir, `${json.id}.jar`) : ""
+    json.id ? path.join(sourceDir, `${json.id}.jar`) : "",
   ].filter(Boolean);
 
-  const sourceJar = candidates.find(candidate => fs.existsSync(candidate));
+  const sourceJar = candidates.find((candidate) => fs.existsSync(candidate));
   if (!sourceJar) return;
 
   const targetDir = path.join(versionsRoot, versionId);
@@ -1007,11 +977,7 @@ function installCustomVersionJson(profile) {
 
   const targetJson = path.join(versionDir, `${versionId}.json`);
 
-  fs.writeFileSync(
-    targetJson,
-    JSON.stringify({ ...json, id: versionId }, null, 2),
-    "utf8"
-  );
+  fs.writeFileSync(targetJson, JSON.stringify({ ...json, id: versionId }, null, 2), "utf8");
 
   copyMatchingJarIfPresent(profile.customVersionJsonPath, versionId, json, versionsRoot);
 
@@ -1027,7 +993,7 @@ function buildVersionOptions(profile, customVersionId) {
 
   const versionOptions = {
     number: minecraftVersion,
-    type: profile.versionType || "release"
+    type: profile.versionType || "release",
   };
 
   if (customVersionId) {
@@ -1054,7 +1020,7 @@ function sanitizeLauncherLog(line) {
 function createProgressLogger(window) {
   const lastBucketByType = new Map();
 
-  return progress => {
+  return (progress) => {
     const type = String(progress?.type || "progress");
     const task = Number(progress?.task || 0);
     const total = Number(progress?.total || 0);
@@ -1089,7 +1055,7 @@ function createDownloadLogger(window) {
   let lastLog = 0;
   let lastName = "";
 
-  return download => {
+  return (download) => {
     count += 1;
     lastName = String(download || "");
 
@@ -1101,10 +1067,7 @@ function createDownloadLogger(window) {
 
     lastLog = now;
 
-    sendGameLog(
-      window,
-      `[download] ${count} file(s) checked/downloaded. Latest: ${lastName}`
-    );
+    sendGameLog(window, `[download] ${count} file(s) checked/downloaded. Latest: ${lastName}`);
   };
 }
 
@@ -1140,7 +1103,7 @@ async function launch(profileId, window) {
   const logProgress = createProgressLogger(window);
   const logDownload = createDownloadLogger(window);
 
-  launcher.on("debug", line => {
+  launcher.on("debug", (line) => {
     const text = sanitizeLauncherLog(line);
     sendGameLog(window, `[debug] ${text}`);
 
@@ -1150,15 +1113,15 @@ async function launch(profileId, window) {
     }
   });
 
-  launcher.on("data", line => {
+  launcher.on("data", (line) => {
     sendGameLog(window, String(line));
   });
 
-  launcher.on("progress", progress => {
+  launcher.on("progress", (progress) => {
     logProgress(progress);
   });
 
-  launcher.on("download", download => {
+  launcher.on("download", (download) => {
     const text = String(download || "");
 
     if (/^[a-f0-9]{40}$/i.test(text)) {
@@ -1168,7 +1131,7 @@ async function launch(profileId, window) {
     logDownload(download);
   });
 
-  launcher.on("close", code => {
+  launcher.on("close", (code) => {
     sendGameLog(window, `[close] Minecraft exited with code ${code}`);
     sendGameClose(window, code);
     gameProcess = null;
@@ -1183,18 +1146,18 @@ async function launch(profileId, window) {
 
     memory: {
       min: profile.minMemory || "2G",
-      max: profile.maxMemory || "4G"
+      max: profile.maxMemory || "4G",
     },
 
     window: {
       width: Number(profile.width || 854),
       height: Number(profile.height || 480),
-      fullscreen: Boolean(profile.fullscreen)
+      fullscreen: Boolean(profile.fullscreen),
     },
 
     overrides: {
-      gameDirectory: profileRoot
-    }
+      gameDirectory: profileRoot,
+    },
   };
 
   if (profile.javaPath) {
@@ -1250,7 +1213,7 @@ async function launch(profileId, window) {
       profileName: profile.name,
       minecraftVersion: profile.minecraftVersion,
       customVersionId,
-      versionId: customVersionId || profile.minecraftVersion
+      versionId: customVersionId || profile.minecraftVersion,
     };
   } catch (error) {
     gameProcess = null;
@@ -1275,5 +1238,5 @@ async function kill() {
 module.exports = {
   launch,
   isRunning,
-  kill
+  kill,
 };

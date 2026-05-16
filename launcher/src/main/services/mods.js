@@ -52,17 +52,13 @@ function requestBuffer(urlString, redirectCount = 0) {
       {
         headers: {
           "User-Agent": MODRINTH_USER_AGENT,
-          Accept: "application/json"
-        }
+          Accept: "application/json",
+        },
       },
-      response => {
+      (response) => {
         const statusCode = response.statusCode || 0;
 
-        if (
-          statusCode >= 300 &&
-          statusCode < 400 &&
-          response.headers.location
-        ) {
+        if (statusCode >= 300 && statusCode < 400 && response.headers.location) {
           response.resume();
 
           const redirectUrl = new URL(response.headers.location, parsedUrl);
@@ -81,7 +77,7 @@ function requestBuffer(urlString, redirectCount = 0) {
 
         const chunks = [];
 
-        response.on("data", chunk => {
+        response.on("data", (chunk) => {
           chunks.push(chunk);
         });
 
@@ -130,9 +126,7 @@ function extractCollectionId(collectionInput) {
     throw new Error("Modrinth collection URL or ID is required.");
   }
 
-  const match = value.match(
-    /(?:https?:\/\/)?(?:www\.)?modrinth\.com\/collection\/([^/?#\s]+)/
-  );
+  const match = value.match(/(?:https?:\/\/)?(?:www\.)?modrinth\.com\/collection\/([^/?#\s]+)/);
 
   const collectionId = match ? match[1] : value;
 
@@ -147,17 +141,11 @@ function normalizeCollectionProjectIds(collection) {
   const projects = Array.isArray(collection?.projects) ? collection.projects : [];
 
   return projects
-    .map(project => {
+    .map((project) => {
       if (typeof project === "string") return project;
-      return (
-        project?.id ||
-        project?.project_id ||
-        project?.projectId ||
-        project?.slug ||
-        ""
-      );
+      return project?.id || project?.project_id || project?.projectId || project?.slug || "";
     })
-    .map(projectId => String(projectId || "").trim())
+    .map((projectId) => String(projectId || "").trim())
     .filter(Boolean);
 }
 
@@ -192,7 +180,7 @@ function getExistingMods(directory) {
     existingMods[modId] = {
       id: modId,
       filename: item,
-      enabled: lower.endsWith(".jar")
+      enabled: lower.endsWith(".jar"),
     };
   }
 
@@ -203,8 +191,8 @@ function getPrimaryFile(versionData) {
   const files = Array.isArray(versionData?.files) ? versionData.files : [];
 
   return (
-    files.find(file => file.primary && file.url && file.filename) ||
-    files.find(file => file.url && file.filename) ||
+    files.find((file) => file.primary && file.url && file.filename) ||
+    files.find((file) => file.url && file.filename) ||
     null
   );
 }
@@ -232,7 +220,7 @@ async function getLatestCompatibleVersion(projectId, minecraftVersion, loader) {
   const params = new URLSearchParams({
     game_versions: JSON.stringify([minecraftVersion]),
     loaders: JSON.stringify([loader]),
-    include_changelog: "false"
+    include_changelog: "false",
   });
 
   const versions = await getJson(
@@ -247,13 +235,11 @@ async function getLatestCompatibleVersion(projectId, minecraftVersion, loader) {
 }
 
 function getRequiredDependencyProjectIds(versionData) {
-  const dependencies = Array.isArray(versionData?.dependencies)
-    ? versionData.dependencies
-    : [];
+  const dependencies = Array.isArray(versionData?.dependencies) ? versionData.dependencies : [];
 
   return dependencies
-    .filter(dependency => dependency?.dependency_type === "required")
-    .map(dependency => dependency.project_id)
+    .filter((dependency) => dependency?.dependency_type === "required")
+    .map((dependency) => dependency.project_id)
     .filter(Boolean);
 }
 
@@ -268,7 +254,7 @@ async function processModrinthProject({
   logs,
   failedMods,
   isDependency = false,
-  parentProjectId = ""
+  parentProjectId = "",
 }) {
   if (processedMods.has(projectId)) {
     return;
@@ -280,11 +266,7 @@ async function processModrinthProject({
 
   try {
     const existingMod = existingMods[projectId] || null;
-    const latestVersion = await getLatestCompatibleVersion(
-      projectId,
-      minecraftVersion,
-      loader
-    );
+    const latestVersion = await getLatestCompatibleVersion(projectId, minecraftVersion, loader);
 
     if (!latestVersion) {
       const message = `${labelPrefix}No compatible version found for ${projectId} (${minecraftVersion}, ${loader})${
@@ -312,7 +294,7 @@ async function processModrinthProject({
         logs,
         failedMods,
         isDependency: true,
-        parentProjectId: projectId
+        parentProjectId: projectId,
       });
     }
 
@@ -360,7 +342,7 @@ async function processModrinthProject({
     existingMods[projectId] = {
       id: projectId,
       filename: targetFilename,
-      enabled: shouldStayEnabled
+      enabled: shouldStayEnabled,
     };
 
     stats.downloaded += 1;
@@ -379,11 +361,11 @@ async function listMods(profileId) {
 
   const files = fs
     .readdirSync(modsDir)
-    .filter(file => {
+    .filter((file) => {
       const lower = file.toLowerCase();
       return lower.endsWith(".jar") || lower.endsWith(".nojar");
     })
-    .map(file => {
+    .map((file) => {
       const full = path.join(modsDir, file);
       const stat = fs.statSync(full);
       const enabled = file.toLowerCase().endsWith(".jar");
@@ -394,7 +376,7 @@ async function listMods(profileId) {
         path: full,
         enabled,
         sizeBytes: stat.size,
-        updatedAt: stat.mtime.toISOString()
+        updatedAt: stat.mtime.toISOString(),
       };
     });
 
@@ -418,7 +400,7 @@ async function addMods(profileId, filePaths = []) {
     added.push({
       filename,
       path: target,
-      enabled: true
+      enabled: true,
     });
   }
 
@@ -430,14 +412,18 @@ async function updateFromModrinthCollection(profileId, collectionInput) {
   const modsDir = getModsDir(profile);
 
   const minecraftVersion = String(profile.minecraftVersion || "").trim();
-  const loader = String(profile.loaderType || "").trim().toLowerCase();
+  const loader = String(profile.loaderType || "")
+    .trim()
+    .toLowerCase();
 
   if (!minecraftVersion) {
     throw new Error("This installation does not have a Minecraft version set.");
   }
 
   if (!loader || loader === "vanilla") {
-    throw new Error("Modrinth mod updates require a mod loader installation, such as fabric, forge, quilt, or neoforge.");
+    throw new Error(
+      "Modrinth mod updates require a mod loader installation, such as fabric, forge, quilt, or neoforge."
+    );
   }
 
   const collectionId = extractCollectionId(collectionInput);
@@ -458,7 +444,7 @@ async function updateFromModrinthCollection(profileId, collectionInput) {
     downloaded: 0,
     updated: 0,
     skipped: 0,
-    failed: 0
+    failed: 0,
   };
 
   logs.push(
@@ -475,7 +461,7 @@ async function updateFromModrinthCollection(profileId, collectionInput) {
       processedMods,
       stats,
       logs,
-      failedMods
+      failedMods,
     });
   }
 
@@ -486,7 +472,7 @@ async function updateFromModrinthCollection(profileId, collectionInput) {
     loader,
     stats,
     logs,
-    failedMods
+    failedMods,
   };
 }
 
@@ -518,7 +504,7 @@ async function setModEnabled(profileId, filename, enabled) {
   if (currentFile === targetFile) {
     return {
       ok: true,
-      filename: targetName
+      filename: targetName,
     };
   }
 
@@ -530,7 +516,7 @@ async function setModEnabled(profileId, filename, enabled) {
 
   return {
     ok: true,
-    filename: targetName
+    filename: targetName,
   };
 }
 
@@ -552,5 +538,5 @@ module.exports = {
   addMods,
   updateFromModrinthCollection,
   setModEnabled,
-  removeMod
+  removeMod,
 };

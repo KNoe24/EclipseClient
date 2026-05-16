@@ -14,7 +14,7 @@ function fetchBuffer(url) {
     const client = url.startsWith("https:") ? https : http;
 
     client
-      .get(url, response => {
+      .get(url, (response) => {
         if (response.statusCode >= 300 && response.statusCode < 400 && response.headers.location) {
           fetchBuffer(response.headers.location).then(resolve).catch(reject);
           return;
@@ -27,7 +27,7 @@ function fetchBuffer(url) {
 
         const chunks = [];
 
-        response.on("data", chunk => {
+        response.on("data", (chunk) => {
           chunks.push(chunk);
         });
 
@@ -80,7 +80,7 @@ function removeDirContents(dir) {
 
     fs.rmSync(fullPath, {
       recursive: true,
-      force: true
+      force: true,
     });
   }
 }
@@ -102,7 +102,7 @@ function readLocalManifest(gameDir) {
 async function findOrCreateDefaultProfile(manifest) {
   const profilesData = await profileService.listProfiles();
 
-  let profile = profilesData.profiles.find(item => {
+  let profile = profilesData.profiles.find((item) => {
     return item.id === "default" || item.name.toLowerCase() === "default";
   });
 
@@ -115,7 +115,7 @@ async function findOrCreateDefaultProfile(manifest) {
       customVersionId: manifest.customVersionId || "default-client",
       minMemory: manifest.memory?.min || "2G",
       maxMemory: manifest.memory?.max || "4G",
-      gameDir: path.join(storage.getRootDir(), ".launcher")
+      gameDir: path.join(storage.getRootDir(), ".launcher"),
     });
   }
 
@@ -126,7 +126,7 @@ async function findOrCreateDefaultProfile(manifest) {
     loaderType: manifest.loaderType || profile.loaderType || "custom",
     customVersionId: manifest.customVersionId || profile.customVersionId || "default-client",
     minMemory: manifest.memory?.min || profile.minMemory || "2G",
-    maxMemory: manifest.memory?.max || profile.maxMemory || "4G"
+    maxMemory: manifest.memory?.max || profile.maxMemory || "4G",
   });
 
   return profile;
@@ -150,12 +150,12 @@ async function getDefaultClientUpdateInfo() {
     updateAvailable: hasClientVersionChanged(localManifest, manifest),
     localClientVersion: localManifest?.clientVersion || null,
     remoteClientVersion: manifest.clientVersion || null,
-    updateMode: manifest.updateMode || "keep"
+    updateMode: manifest.updateMode || "keep",
   };
 }
 
 async function syncDefaultClient(window, options = {}) {
-  const send = payload => {
+  const send = (payload) => {
     if (window && !window.isDestroyed()) {
       window.webContents.send("clientUpdater:status", payload);
     }
@@ -163,7 +163,7 @@ async function syncDefaultClient(window, options = {}) {
 
   send({
     type: "checking",
-    message: "Checking default client files..."
+    message: "Checking default client files...",
   });
 
   const manifest = await fetchJson(DEFAULT_MANIFEST_URL);
@@ -178,7 +178,7 @@ async function syncDefaultClient(window, options = {}) {
       type: "done",
       message: "Default client is already up to date.",
       updatedFiles: [],
-      skippedFiles: []
+      skippedFiles: [],
     });
 
     return {
@@ -186,14 +186,14 @@ async function syncDefaultClient(window, options = {}) {
       updated: false,
       profile,
       updatedFiles: [],
-      skippedFiles: []
+      skippedFiles: [],
     };
   }
 
   if (mode === "delete") {
     send({
       type: "deleting",
-      message: "Deleting old Default installation..."
+      message: "Deleting old Default installation...",
     });
 
     removeDirContents(profile.gameDir);
@@ -211,7 +211,11 @@ async function syncDefaultClient(window, options = {}) {
     const targetPath = path.join(gameDir, relativePath);
     const currentHash = sha256File(targetPath);
 
-    if (mode !== "delete" && currentHash && currentHash.toLowerCase() === file.sha256.toLowerCase()) {
+    if (
+      mode !== "delete" &&
+      currentHash &&
+      currentHash.toLowerCase() === file.sha256.toLowerCase()
+    ) {
       skippedFiles.push(relativePath);
       continue;
     }
@@ -219,7 +223,7 @@ async function syncDefaultClient(window, options = {}) {
     send({
       type: "downloading",
       message: `Downloading ${relativePath}`,
-      file: relativePath
+      file: relativePath,
     });
 
     const buffer = await fetchBuffer(file.url);
@@ -241,7 +245,7 @@ async function syncDefaultClient(window, options = {}) {
     type: "done",
     message: `Default client updated. Updated ${updatedFiles.length} file(s).`,
     updatedFiles,
-    skippedFiles
+    skippedFiles,
   });
 
   return {
@@ -249,11 +253,11 @@ async function syncDefaultClient(window, options = {}) {
     updated: true,
     profile,
     updatedFiles,
-    skippedFiles
+    skippedFiles,
   };
 }
 
 module.exports = {
   getDefaultClientUpdateInfo,
-  syncDefaultClient
+  syncDefaultClient,
 };

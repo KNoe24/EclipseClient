@@ -48,7 +48,7 @@ function sendClientUpdaterError(error) {
 
   mainWindow.webContents.send("clientUpdater:status", {
     type: "error",
-    message: error.message || "Failed to sync default client."
+    message: error.message || "Failed to sync default client.",
   });
 }
 
@@ -59,7 +59,7 @@ function sendClientUpdaterError(error) {
 function defaultSkinsFile() {
   return {
     selectedSkinId: "",
-    skins: []
+    skins: [],
   };
 }
 
@@ -68,13 +68,15 @@ function skinId() {
 }
 
 function safeSkinName(value) {
-  return String(value || "Skin")
-    .trim()
-    .replace(/[<>:"/\\|?*\x00-\x1F]/g, "_")
-    .replace(/\s+/g, "_")
-    .replace(/_+/g, "_")
-    .replace(/^_+|_+$/g, "")
-    .slice(0, 70) || "Skin";
+  return (
+    String(value || "Skin")
+      .trim()
+      .replace(/[<>:"/\\|?*\x00-\x1F]/g, "_")
+      .replace(/\s+/g, "_")
+      .replace(/_+/g, "_")
+      .replace(/^_+|_+$/g, "")
+      .slice(0, 70) || "Skin"
+  );
 }
 
 function normalizeSkinModel(value) {
@@ -90,13 +92,13 @@ function readSkinsFile() {
 
   const skins = Array.isArray(data?.skins) ? data.skins : [];
 
-  const selectedSkinId = skins.some(skin => skin.id === data?.selectedSkinId)
+  const selectedSkinId = skins.some((skin) => skin.id === data?.selectedSkinId)
     ? data.selectedSkinId
     : "";
 
   return {
     selectedSkinId,
-    skins: skins.map(skin => ({
+    skins: skins.map((skin) => ({
       id: skin.id || skinId(),
       name: String(skin.name || "Skin"),
       model: normalizeSkinModel(skin.model),
@@ -104,15 +106,15 @@ function readSkinsFile() {
       sourceUrl: String(skin.sourceUrl || ""),
       capeId: normalizeCapeId(skin.capeId),
       createdAt: skin.createdAt || new Date().toISOString(),
-      updatedAt: skin.updatedAt || new Date().toISOString()
-    }))
+      updatedAt: skin.updatedAt || new Date().toISOString(),
+    })),
   };
 }
 
 function writeSkinsFile(data) {
   const normalized = {
     selectedSkinId: data?.selectedSkinId || "",
-    skins: Array.isArray(data?.skins) ? data.skins : []
+    skins: Array.isArray(data?.skins) ? data.skins : [],
   };
 
   return storage.writeJson(SKINS_FILE, normalized);
@@ -133,14 +135,14 @@ function withComputedSkinFields(skin) {
   return {
     ...skin,
     skinDataUrl: skinDataUrlFor(skin.skinPath),
-    dataUrl: skinDataUrlFor(skin.skinPath) || skin.sourceUrl || ""
+    dataUrl: skinDataUrlFor(skin.skinPath) || skin.sourceUrl || "",
   };
 }
 
 function withComputedSkinsData(data) {
   return {
     selectedSkinId: data.selectedSkinId,
-    skins: data.skins.map(withComputedSkinFields)
+    skins: data.skins.map(withComputedSkinFields),
   };
 }
 
@@ -230,7 +232,9 @@ async function importSkinInput(input, prefix = "skin") {
 }
 
 function toUndashedUuid(uuid) {
-  return String(uuid || "").replaceAll("-", "").trim();
+  return String(uuid || "")
+    .replaceAll("-", "")
+    .trim();
 }
 
 function forceHttpsTextureUrl(url) {
@@ -239,7 +243,7 @@ function forceHttpsTextureUrl(url) {
 
 function decodeMojangTexturesProperty(profileResponse) {
   const texturesProperty = Array.isArray(profileResponse?.properties)
-    ? profileResponse.properties.find(property => property.name === "textures")
+    ? profileResponse.properties.find((property) => property.name === "textures")
     : null;
 
   if (!texturesProperty?.value) {
@@ -278,26 +282,21 @@ async function getMojangSessionTextures(uuid) {
 
   const skinUrl = forceHttpsTextureUrl(decodedTextures.textures.SKIN?.url || "");
   const capeUrl = forceHttpsTextureUrl(decodedTextures.textures.CAPE?.url || "");
-  const model = decodedTextures.textures.SKIN?.metadata?.model === "slim"
-    ? "SLIM"
-    : "CLASSIC";
+  const model = decodedTextures.textures.SKIN?.metadata?.model === "slim" ? "SLIM" : "CLASSIC";
 
   return {
     profileId: decodedTextures.profileId || cleanUuid,
     profileName: decodedTextures.profileName || profile.name || "",
     skinUrl,
     capeUrl,
-    model
+    model,
   };
 }
 
 async function getMinecraftProfileFromServices() {
   const now = Date.now();
 
-  if (
-    cachedMinecraftProfile &&
-    now - cachedMinecraftProfileAt < MINECRAFT_PROFILE_CACHE_MS
-  ) {
+  if (cachedMinecraftProfile && now - cachedMinecraftProfileAt < MINECRAFT_PROFILE_CACHE_MS) {
     return cachedMinecraftProfile;
   }
 
@@ -311,8 +310,8 @@ async function getMinecraftProfileFromServices() {
     const response = await fetch("https://api.minecraftservices.com/minecraft/profile", {
       headers: {
         Authorization: `Bearer ${token}`,
-        Accept: "application/json"
-      }
+        Accept: "application/json",
+      },
     });
 
     if (!response.ok) {
@@ -332,7 +331,7 @@ async function getMinecraftProfileFromServices() {
   const skins = Array.isArray(profile?.skins) ? [...profile.skins] : [];
   const capes = Array.isArray(profile?.capes) ? [...profile.capes] : [];
 
-  const activeSkinExists = skins.some(skin => skin.state === "ACTIVE");
+  const activeSkinExists = skins.some((skin) => skin.state === "ACTIVE");
 
   if (!activeSkinExists && sessionTextures?.skinUrl) {
     skins.unshift({
@@ -340,12 +339,12 @@ async function getMinecraftProfileFromServices() {
       state: "ACTIVE",
       url: sessionTextures.skinUrl,
       variant: sessionTextures.model || "CLASSIC",
-      source: "sessionserver"
+      source: "sessionserver",
     });
   }
 
   const sessionCapeAlreadyListed = sessionTextures?.capeUrl
-    ? capes.some(cape => forceHttpsTextureUrl(cape.url) === sessionTextures.capeUrl)
+    ? capes.some((cape) => forceHttpsTextureUrl(cape.url) === sessionTextures.capeUrl)
     : true;
 
   if (sessionTextures?.capeUrl && !sessionCapeAlreadyListed) {
@@ -354,7 +353,7 @@ async function getMinecraftProfileFromServices() {
       state: "ACTIVE",
       url: sessionTextures.capeUrl,
       alias: "Mojang Cape",
-      source: "sessionserver"
+      source: "sessionserver",
     });
   }
 
@@ -364,7 +363,7 @@ async function getMinecraftProfileFromServices() {
     skins,
     capes,
     sessionTextures,
-    warning: profileError
+    warning: profileError,
   };
 
   cachedMinecraftProfile = result;
@@ -393,12 +392,12 @@ function createMultipartSkinBody({ variant, filename, fileBuffer }) {
 
     fileBuffer,
 
-    Buffer.from(`\r\n--${boundary}--\r\n`, "utf8")
+    Buffer.from(`\r\n--${boundary}--\r\n`, "utf8"),
   ];
 
   return {
     boundary,
-    body: Buffer.concat(chunks)
+    body: Buffer.concat(chunks),
   };
 }
 
@@ -413,13 +412,13 @@ function uploadSkinMultipartWithHttps({ token, multipart }) {
           Authorization: `Bearer ${token}`,
           Accept: "application/json",
           "Content-Type": `multipart/form-data; boundary=${multipart.boundary}`,
-          "Content-Length": multipart.body.byteLength
-        }
+          "Content-Length": multipart.body.byteLength,
+        },
       },
-      response => {
+      (response) => {
         const chunks = [];
 
-        response.on("data", chunk => {
+        response.on("data", (chunk) => {
           chunks.push(chunk);
         });
 
@@ -463,29 +462,32 @@ async function applyCape(capeId) {
     return {
       ok: true,
       skipped: true,
-      reason: "Sessionserver cape texture is already visible but cannot be activated by capeId."
+      reason: "Sessionserver cape texture is already visible but cannot be activated by capeId.",
     };
   }
 
   if (!safeCapeId) {
-    const response = await fetch("https://api.minecraftservices.com/minecraft/profile/capes/active", {
-      method: "DELETE",
-      headers: {
-        Authorization: `Bearer ${token}`
+    const response = await fetch(
+      "https://api.minecraftservices.com/minecraft/profile/capes/active",
+      {
+        method: "DELETE",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
       }
-    });
+    );
 
     if (!response.ok && response.status !== 404) {
       const text = await response.text().catch(() => "");
 
       return {
         ok: false,
-        warning: `Skin was applied, but cape could not be cleared. HTTP ${response.status}: ${text || response.statusText}`
+        warning: `Skin was applied, but cape could not be cleared. HTTP ${response.status}: ${text || response.statusText}`,
       };
     }
 
     return {
-      ok: true
+      ok: true,
     };
   }
 
@@ -494,11 +496,11 @@ async function applyCape(capeId) {
     headers: {
       Authorization: `Bearer ${token}`,
       "Content-Type": "application/json",
-      Accept: "application/json"
+      Accept: "application/json",
     },
     body: JSON.stringify({
-      capeId: safeCapeId
-    })
+      capeId: safeCapeId,
+    }),
   });
 
   if (!response.ok) {
@@ -506,12 +508,12 @@ async function applyCape(capeId) {
 
     return {
       ok: false,
-      warning: `Skin was applied, but cape could not be activated. HTTP ${response.status}: ${text || response.statusText}`
+      warning: `Skin was applied, but cape could not be activated. HTTP ${response.status}: ${text || response.statusText}`,
     };
   }
 
   return {
-    ok: true
+    ok: true,
   };
 }
 
@@ -525,7 +527,7 @@ async function uploadSkinToMinecraft(skin) {
     skinPath = await importSkinBuffer(buffer, skin.name || "skin");
 
     const data = readSkinsFile();
-    const found = data.skins.find(item => item.id === skin.id);
+    const found = data.skins.find((item) => item.id === skin.id);
 
     if (found) {
       found.skinPath = skinPath;
@@ -545,12 +547,12 @@ async function uploadSkinToMinecraft(skin) {
   const multipart = createMultipartSkinBody({
     variant: skin.model === "slim" ? "slim" : "classic",
     filename: `${safeSkinName(skin.name || "skin")}.png`,
-    fileBuffer: buffer
+    fileBuffer: buffer,
   });
 
   return uploadSkinMultipartWithHttps({
     token,
-    multipart
+    multipart,
   });
 }
 
@@ -572,7 +574,7 @@ async function createSkin(data = {}) {
     sourceUrl: String(data.sourceUrl || ""),
     capeId: normalizeCapeId(data.capeId),
     createdAt: now,
-    updatedAt: now
+    updatedAt: now,
   };
 
   skinsData.skins.push(skin);
@@ -585,7 +587,7 @@ async function createSkin(data = {}) {
 
 async function updateSkin(skinIdValue, patch = {}) {
   const data = readSkinsFile();
-  const skin = data.skins.find(item => item.id === skinIdValue);
+  const skin = data.skins.find((item) => item.id === skinIdValue);
 
   if (!skin) {
     throw new Error("Skin not found.");
@@ -621,7 +623,7 @@ async function updateSkin(skinIdValue, patch = {}) {
 
 async function duplicateSkin(skinIdValue) {
   const data = readSkinsFile();
-  const original = data.skins.find(item => item.id === skinIdValue);
+  const original = data.skins.find((item) => item.id === skinIdValue);
 
   if (!original) {
     throw new Error("Skin not found.");
@@ -641,7 +643,7 @@ async function duplicateSkin(skinIdValue) {
     name: `${original.name} Copy`,
     skinPath: copiedPath,
     createdAt: now,
-    updatedAt: now
+    updatedAt: now,
   };
 
   data.skins.push(copy);
@@ -654,13 +656,13 @@ async function duplicateSkin(skinIdValue) {
 
 async function deleteSkin(skinIdValue) {
   const data = readSkinsFile();
-  const skin = data.skins.find(item => item.id === skinIdValue);
+  const skin = data.skins.find((item) => item.id === skinIdValue);
 
   if (!skin) {
     throw new Error("Skin not found.");
   }
 
-  data.skins = data.skins.filter(item => item.id !== skinIdValue);
+  data.skins = data.skins.filter((item) => item.id !== skinIdValue);
 
   if (data.selectedSkinId === skinIdValue) {
     data.selectedSkinId = data.skins[0]?.id || "";
@@ -684,7 +686,7 @@ async function useSkin(skinIdValue, options = {}) {
 
   try {
     const data = readSkinsFile();
-    const skin = data.skins.find(item => item.id === skinIdValue);
+    const skin = data.skins.find((item) => item.id === skinIdValue);
 
     if (!skin) {
       throw new Error("Skin not found.");
@@ -710,7 +712,7 @@ async function useSkin(skinIdValue, options = {}) {
     return {
       ok: true,
       skin: withComputedSkinFields(skin),
-      capeResult
+      capeResult,
     };
   } catch (error) {
     const message = error.message || String(error);
@@ -740,7 +742,7 @@ async function checkDefaultClientOnStartup() {
         type: "done",
         message: "Default client is already up to date.",
         updatedFiles: [],
-        skippedFiles: []
+        skippedFiles: [],
       });
 
       await discordService.setLauncherActivity(info.profile?.name || "Default");
@@ -749,7 +751,7 @@ async function checkDefaultClientOnStartup() {
 
     if (info.updateMode === "delete") {
       await clientUpdaterService.syncDefaultClient(mainWindow, {
-        mode: "delete"
+        mode: "delete",
       });
 
       await discordService.setLauncherActivity(info.profile?.name || "Default");
@@ -758,7 +760,7 @@ async function checkDefaultClientOnStartup() {
 
     if (info.updateMode === "keep") {
       await clientUpdaterService.syncDefaultClient(mainWindow, {
-        mode: "keep"
+        mode: "keep",
       });
 
       await discordService.setLauncherActivity(info.profile?.name || "Default");
@@ -769,7 +771,7 @@ async function checkDefaultClientOnStartup() {
       type: "choice-required",
       message: `Default client update available: ${info.localClientVersion || "none"} → ${info.remoteClientVersion || "new"}`,
       localClientVersion: info.localClientVersion,
-      remoteClientVersion: info.remoteClientVersion
+      remoteClientVersion: info.remoteClientVersion,
     });
 
     await discordService.setLauncherActivity(info.profile?.name || "Default");
@@ -794,19 +796,19 @@ function createWindow() {
     title: "Eclipse Launcher",
     icon: getWindowIconPath(),
     backgroundColor: "#111318",
-    titleBarStyle: 'hidden', // Hides native title bar on macOS, keeps window controls
+    titleBarStyle: "hidden", // Hides native title bar on macOS, keeps window controls
     titleBarOverlay: {
-      color: '#111318',       // Background color of the title bar/controls area
-      symbolColor: '#ffffff', // Color of the window control buttons (minimize, close, etc.)
-      height: 35              // Optional: Height of the title bar area
+      color: "#111318", // Background color of the title bar/controls area
+      symbolColor: "#ffffff", // Color of the window control buttons (minimize, close, etc.)
+      height: 35, // Optional: Height of the title bar area
     },
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: false,
-      webviewTag: true
-    }
+      webviewTag: true,
+    },
   });
 
   mainWindow.loadFile(path.join(__dirname, "../renderer/index.html"));
@@ -841,7 +843,7 @@ app.whenReady().then(async () => {
 
     return {
       totalBytes,
-      totalGb
+      totalGb,
     };
   });
 
@@ -864,7 +866,7 @@ app.whenReady().then(async () => {
       "https://launcher.wawe.cc",
       "https://minecraft.net",
       "https://www.minecraft.net/en-us/articles",
-      "https://launcher.wawe.cc/launcher/changelog/"
+      "https://launcher.wawe.cc/launcher/changelog/",
     ];
 
     if (!allowedUrls.includes(url)) {
@@ -874,7 +876,7 @@ app.whenReady().then(async () => {
     await shell.openExternal(url);
 
     return {
-      ok: true
+      ok: true,
     };
   });
 
@@ -891,7 +893,7 @@ app.whenReady().then(async () => {
     }
 
     return {
-      ok: true
+      ok: true,
     };
   });
 
@@ -924,7 +926,7 @@ app.whenReady().then(async () => {
       throw new Error("You must keep at least one installation.");
     }
 
-    const profileToDelete = profiles.find(profile => profile.id === id);
+    const profileToDelete = profiles.find((profile) => profile.id === id);
 
     if (!profileToDelete) {
       throw new Error("Installation not found.");
@@ -955,7 +957,7 @@ app.whenReady().then(async () => {
           ? remainingProfilesData.profiles
           : [];
 
-        const folderStillUsed = remainingProfiles.some(profile => {
+        const folderStillUsed = remainingProfiles.some((profile) => {
           if (!profile.gameDir) return false;
           return path.resolve(profile.gameDir) === resolvedGameDir;
         });
@@ -966,7 +968,7 @@ app.whenReady().then(async () => {
           try {
             await fsp.rm(resolvedGameDir, {
               recursive: true,
-              force: true
+              force: true,
             });
 
             deletedGameDir = true;
@@ -981,7 +983,7 @@ app.whenReady().then(async () => {
       ...result,
       deletedGameDir,
       skippedGameDirDeleteReason,
-      folderDeleteError
+      folderDeleteError,
     };
   });
 
@@ -1006,7 +1008,7 @@ app.whenReady().then(async () => {
   ipcMain.handle("profiles:pickGameDir", async () => {
     const result = await dialog.showOpenDialog(mainWindow, {
       title: "Choose game folder",
-      properties: ["openDirectory", "createDirectory"]
+      properties: ["openDirectory", "createDirectory"],
     });
 
     if (result.canceled || !result.filePaths[0]) return null;
@@ -1016,7 +1018,7 @@ app.whenReady().then(async () => {
   ipcMain.handle("profiles:pickJava", async () => {
     const result = await dialog.showOpenDialog(mainWindow, {
       title: "Choose Java executable",
-      properties: ["openFile"]
+      properties: ["openFile"],
     });
 
     if (result.canceled || !result.filePaths[0]) return null;
@@ -1027,7 +1029,7 @@ app.whenReady().then(async () => {
     const result = await dialog.showOpenDialog(mainWindow, {
       title: "Choose custom Minecraft version JSON",
       filters: [{ name: "Minecraft Version JSON", extensions: ["json"] }],
-      properties: ["openFile"]
+      properties: ["openFile"],
     });
 
     if (result.canceled || !result.filePaths[0]) return null;
@@ -1038,7 +1040,7 @@ app.whenReady().then(async () => {
     const result = await dialog.showOpenDialog(mainWindow, {
       title: "Choose installation icon PNG",
       filters: [{ name: "PNG Image", extensions: ["png"] }],
-      properties: ["openFile"]
+      properties: ["openFile"],
     });
 
     if (result.canceled || !result.filePaths[0]) return null;
@@ -1060,10 +1062,7 @@ app.whenReady().then(async () => {
       !Array.isArray(filePaths) &&
       filePaths.source === "modrinth-collection"
     ) {
-      return modsService.updateFromModrinthCollection(
-        profileId,
-        filePaths.collection
-      );
+      return modsService.updateFromModrinthCollection(profileId, filePaths.collection);
     }
 
     if (Array.isArray(filePaths) && filePaths.length > 0) {
@@ -1073,7 +1072,7 @@ app.whenReady().then(async () => {
     const result = await dialog.showOpenDialog(mainWindow, {
       title: "Add mod jar files",
       filters: [{ name: "Minecraft Mods", extensions: ["jar"] }],
-      properties: ["openFile", "multiSelections"]
+      properties: ["openFile", "multiSelections"],
     });
 
     if (result.canceled || result.filePaths.length === 0) return [];
@@ -1121,7 +1120,7 @@ app.whenReady().then(async () => {
     const result = await dialog.showOpenDialog(mainWindow, {
       title: "Choose Minecraft skin PNG",
       filters: [{ name: "Minecraft Skin PNG", extensions: ["png"] }],
-      properties: ["openFile"]
+      properties: ["openFile"],
     });
 
     if (result.canceled || !result.filePaths[0]) return null;
@@ -1132,7 +1131,7 @@ app.whenReady().then(async () => {
 
     return {
       skinPath: targetPath,
-      skinDataUrl: skinDataUrlFor(targetPath)
+      skinDataUrl: skinDataUrlFor(targetPath),
     };
   });
 
@@ -1141,7 +1140,7 @@ app.whenReady().then(async () => {
 
     return {
       skinPath,
-      skinDataUrl: skinDataUrlFor(skinPath)
+      skinDataUrl: skinDataUrlFor(skinPath),
     };
   });
 
@@ -1213,13 +1212,13 @@ app.whenReady().then(async () => {
 });
 
 app.on("before-quit", () => {
-  Promise.resolve(discordService.destroy()).catch(error => {
+  Promise.resolve(discordService.destroy()).catch((error) => {
     console.warn("[discord] Failed to destroy RPC:", error.message || error);
   });
 });
 
 app.on("window-all-closed", () => {
-  Promise.resolve(discordService.destroy()).catch(error => {
+  Promise.resolve(discordService.destroy()).catch((error) => {
     console.warn("[discord] Failed to destroy RPC:", error.message || error);
   });
 

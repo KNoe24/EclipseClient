@@ -4,7 +4,11 @@
 
 body {
   margin: 0;
-  font-family: Inter, Segoe UI, Arial, sans-serif;
+  font-family:
+    Inter,
+    Segoe UI,
+    Arial,
+    sans-serif;
   background: #0f1117;
   color: #f4f6fb;
 }
@@ -188,8 +192,7 @@ select:focus {
   border: 1px solid #242936;
   border-radius: 22px;
   background:
-    radial-gradient(circle at top left, rgba(79, 124, 255, 0.22), transparent 34%),
-    #151923;
+    radial-gradient(circle at top left, rgba(79, 124, 255, 0.22), transparent 34%), #151923;
 }
 
 .hero h2,
@@ -336,9 +339,7 @@ small {
 
 .profile-card.selected {
   border-color: #4f7cff;
-  background:
-    linear-gradient(90deg, rgba(79, 124, 255, 0.12), transparent),
-    #151923;
+  background: linear-gradient(90deg, rgba(79, 124, 255, 0.12), transparent), #151923;
 }
 
 .profile-card p {
