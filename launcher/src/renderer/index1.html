@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta
+    http-equiv="Content-Security-Policy"
+    content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://api.mineatar.io; frame-src https://www.minecraft.net https://launcher.wawe.cc; child-src https://www.minecraft.net https://launcher.wawe.cc;"
+  />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>asddsa Launcher</title>
+  <link rel="stylesheet" href="./newstyles.css" />
+</head>
+<body>
+  <div class="app">
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="logo">A</div>
+        <div>
+          <h1>asddsa</h1>
+          <p>Custom Client</p>
+        </div>
+      </div>
+
+      <nav class="nav">
+        <button class="nav-btn active" data-page="home">Home</button>
+        <button class="nav-btn" data-page="installations">Installations</button>
+        <button class="nav-btn" data-page="mods">Mods</button>
+        <button class="nav-btn" data-page="console">Console</button>
+        <button class="nav-btn" data-page="updates">Updater</button>
+        <button class="nav-btn" data-page="settings">Profile Settings</button>
+      </nav>
+
+      <div class="account-box">
+        <div class="account-header">
+          <img
+            id="playerHead"
+            class="player-head"
+            src="./static/img/default_logged_out_head.png"
+            alt="Player head"
+          />
+          <div>
+            <div id="accountName">Not logged in</div>
+            <div id="accountSubtext" class="account-subtext">Microsoft account</div>
+          </div>
+        </div>
+
+        <button id="loginBtn">Login with Microsoft</button>
+        <button id="logoutBtn" class="secondary hidden">Logout</button>
+      </div>
+    </aside>
+
+    <main class="content">
+      <section id="page-home" class="page active">
+        <div class="hero">
+          <div>
+            <h2>Play Minecraft</h2>
+            <p>Select an installation, then start the selected version.</p>
+          </div>
+
+          <div class="hero-actions">
+            <div id="profileDropup" class="profile-dropup">
+              <button id="profileDropupButton" class="profile-dropup-button" type="button">
+                <span id="selectedProfileName">Select Installation</span>
+                <span class="dropup-arrow">▲</span>
+              </button>
+
+              <div id="profileDropupMenu" class="profile-dropup-menu hidden"></div>
+            </div>
+
+            <button id="launchBtn" class="primary">Start</button>
+            <button id="killBtn" class="danger">Stop</button>
+          </div>
+        </div>
+
+        <select id="profileSelect" class="hidden"></select>
+
+        <div class="cards">
+          <div class="card">
+            <h3>Selected Installation</h3>
+            <div id="selectedProfileDetails" class="muted">No profile selected.</div>
+          </div>
+
+          <div class="card">
+            <h3>Status</h3>
+            <div id="launcherStatus">Ready.</div>
+            <div id="discordStatus" class="small-muted">Discord RPC: checking...</div>
+          </div>
+        </div>
+      </section>
+
+      <section id="page-installations" class="page">
+        <div class="page-header">
+          <div>
+            <h2>Installations</h2>
+            <p>Click a profile to select and edit it.</p>
+          </div>
+          <button id="newProfileBtn" class="primary">New Installation</button>
+        </div>
+
+        <div id="profilesList" class="profile-list"></div>
+      </section>
+
+      <section id="page-mods" class="page">
+        <div class="page-header">
+          <div>
+            <h2>Mods</h2>
+            <p>Mods are copied into the selected installation’s mods folder.</p>
+          </div>
+          <button id="addModsBtn" class="primary">Add Mods</button>
+        </div>
+
+        <div id="modsList" class="mod-list"></div>
+      </section>
+
+      <section id="page-console" class="page">
+        <div class="page-header">
+          <div>
+            <h2>Console</h2>
+            <p>Launcher, updater, and game logs appear here.</p>
+          </div>
+          <button id="clearConsoleBtn">Clear</button>
+        </div>
+
+        <pre id="consoleOutput" class="console"></pre>
+      </section>
+
+      <section id="page-updates" class="page">
+        <div class="page-header">
+          <div>
+            <h2>Updater</h2>
+            <p>Launcher and default client updates.</p>
+          </div>
+          <button id="checkUpdatesBtn" class="primary">Check Launcher Updates</button>
+        </div>
+
+        <div class="card">
+          <h3>Update Status</h3>
+          <div id="updateStatus">Default client updater runs automatically on launcher open.</div>
+
+          <div class="update-actions">
+            <button id="downloadUpdateBtn" class="hidden">Download Launcher Update</button>
+            <button id="installUpdateBtn" class="hidden primary">Install Launcher Update</button>
+            <button id="checkDefaultClientBtn">Check Default Client</button>
+            <button id="syncDefaultKeepBtn">Update Default: Keep Files</button>
+            <button id="syncDefaultDeleteBtn" class="danger">Update Default: Delete Old Installation</button>
+          </div>
+        </div>
+      </section>
+
+      <section id="page-settings" class="page">
+        <div class="page-header">
+          <div>
+            <h2>Profile Settings</h2>
+            <p>Edit settings for the currently selected installation.</p>
+          </div>
+          <button id="saveSettingsBtn" class="primary">Save Settings</button>
+        </div>
+
+        <form id="settingsForm" class="settings-grid">
+          <label>
+            Installation Name
+            <input id="settingName" type="text" />
+          </label>
+
+          <label>
+            Minecraft Version
+            <input id="settingMcVersion" type="text" placeholder="1.21.1" />
+          </label>
+
+          <label>
+            Version Type
+            <select id="settingVersionType">
+              <option value="release">release</option>
+              <option value="snapshot">snapshot</option>
+              <option value="old_beta">old_beta</option>
+              <option value="old_alpha">old_alpha</option>
+            </select>
+          </label>
+
+          <label>
+            Loader Type
+            <select id="settingLoader">
+              <option value="vanilla">Vanilla</option>
+              <option value="fabric">Fabric</option>
+              <option value="forge">Forge</option>
+              <option value="quilt">Quilt</option>
+              <option value="neoforge">NeoForge</option>
+              <option value="custom">Custom</option>
+            </select>
+          </label>
+
+          <label>
+            Custom Version ID
+            <input id="settingCustomVersionId" type="text" placeholder="fabric-loader-0.16.9-1.21.1" />
+          </label>
+
+          <label>
+            Custom Version JSON
+            <div class="row">
+              <input id="settingCustomJson" type="text" readonly />
+              <button id="pickCustomJsonBtn" type="button">Pick</button>
+            </div>
+          </label>
+
+          <label>
+            Game Directory
+            <div class="row">
+              <input id="settingGameDir" type="text" />
+              <button id="pickGameDirBtn" type="button">Pick</button>
+            </div>
+          </label>
+
+          <label>
+            Java Executable
+            <div class="row">
+              <input id="settingJavaPath" type="text" placeholder="Leave empty to use system Java" />
+              <button id="pickJavaBtn" type="button">Pick</button>
+            </div>
+          </label>
+
+          <label>
+            Minimum Memory
+            <input id="settingMinMemory" type="text" placeholder="2G" />
+          </label>
+
+          <label>
+            Maximum Memory
+            <input id="settingMaxMemory" type="text" placeholder="4G" />
+          </label>
+
+          <label>
+            Width
+            <input id="settingWidth" type="number" />
+          </label>
+
+          <label>
+            Height
+            <input id="settingHeight" type="number" />
+          </label>
+
+          <label class="checkbox">
+            <input id="settingFullscreen" type="checkbox" />
+            Fullscreen
+          </label>
+
+          <label class="wide">
+            Extra JVM Arguments
+            <input id="settingJvmArgs" type="text" placeholder="-XX:+UseG1GC" />
+          </label>
+
+          <label class="wide">
+            Extra Minecraft Arguments
+            <input id="settingMcArgs" type="text" placeholder="--server example.com" />
+          </label>
+        </form>
+      </section>
+    </main>
+  </div>
+
+  <script src="./renderer.js"></script>
+</body>
+</html>

@@ -1,0 +1,41 @@
+poo
+
+Launcher: 
+    changes/bug fixes:
+        - Make on the skin tab of the home page a skin changer: right side a Current text and below that the current skin with the curent cape. the skin has a moving animation and the player can rotate it, next to that there is the library with has a New skin button, Then all the skins. if we hover ower them then 4 buttons appear just like at the instalation selector. 1. Green: Use 2. blue: Edit 3. Gray: Duploicate 3. Red: Delete on the edit tab we can set a name for this skin, select the player model as wide/slim (use a switch like in the settings test switch: but insted of off and on its: Wide and Slim.) Then at the skin file section There are 2 buttons 1 for Browse wich opens a file explorer where we can upload the skin file, and a edit where it opens an in launcher skin editor, where we can edit our skins. below that option there are the capes with thee options: No cape, {List here all the capes avalable on that users Microsoft account} Before the name there is a checkbox and abowe the name is a photo of the cape wich will be located in the img folder. Ther ewill be a Cancel, Save, and a save & use button.
+Website:
+    changes:
+        - make the launcher(client) update api/download page
+        - make the minecraft(custom version) update/download api/page
+        - make the changelog/news page simular to the instalations page it will display the updates wich i publish, but those wont have the select,edit,delete buttons, and will be bigger and a square
+
+
+Mod:
+    nothing happend here!
+
+
+Erm:
+    - Give full code for every file you touch
+    - dont give it as a downloadable file, give it in a markdown wich i paste in
+    - Dont make new files for fixes, use the normal intended file.
+    - if you change the ui, make the code in the html or css file not inject it in js
+
+
+
+
+
+
+
+
+
+
+
+
+feature:
+    skin manager/editor
+    friends list
+    About page wich lists all mods in the default version and sources for packages used in the client
+    launcher name
+    launcher icons 3/6
+    mod
+    strict mode/smp mode (adds secutity mods that helps smps/servers moderation also allows client only servers) (only for fabric)
