@@ -8,28 +8,6 @@ const { URL } = require("url");
 const storage = require("./storage");
 const profileService = require("./profiles");
 
-/*
-  Default client updates
-  ----------------------
-  This uses the client branch of your GitHub update repo.
-
-  Branch URL shown in browser:
-    https://github.com/KNoe24/eclipse-updates/tree/client
-
-  Raw manifest URL used by the launcher:
-    https://raw.githubusercontent.com/KNoe24/eclipse-updates/client/manifest.json
-
-  Recommended client branch layout:
-    manifest.json
-    versions/eclipse-client/eclipse-client.json
-    versions/eclipse-client/eclipse-client.jar
-    mods/example.jar
-    config/example.json
-
-  In manifest.json, each file can either include a full URL, a relative URL,
-  or no URL at all. If no URL is given, this updater downloads from the same
-  path in the GitHub client branch.
-*/
 const CLIENT_UPDATE_BASE_URL =
   process.env.ECLIPSE_CLIENT_UPDATE_BASE_URL ||
   "https://raw.githubusercontent.com/KNoe24/eclipse-updates/client";
@@ -38,6 +16,19 @@ const DEFAULT_MANIFEST_URL =
   process.env.ECLIPSE_CLIENT_MANIFEST_URL || `${CLIENT_UPDATE_BASE_URL}/manifest.json`;
 
 const MAX_REDIRECTS = 8;
+
+const PROTECTED_ROOT_FILES = new Set([
+  "account.json",
+  "profiles.json",
+  "skins.json",
+  ".launcher-default-manifest.json",
+]);
+
+const PROTECTED_TOP_LEVEL_DIRS = new Set(["profiles", "profile-icons", "skins"]);
+
+function getClientRootDir() {
+  return storage.getRootDir();
+}
 
 function isHttpUrl(value) {
   return /^https?:\/\//i.test(String(value || ""));
@@ -176,24 +167,23 @@ function normalizeManifestPath(relativePath) {
     throw new Error(`Unsafe manifest path: ${relativePath}`);
   }
 
+  const parts = normalized.split(/[\\/]+/).filter(Boolean);
+  const topLevel = parts[0] || "";
+  const basename = path.basename(normalized);
+
+  if (parts.length === 1 && PROTECTED_ROOT_FILES.has(basename)) {
+    throw new Error(`Manifest is not allowed to overwrite protected file: ${relativePath}`);
+  }
+
+  if (PROTECTED_TOP_LEVEL_DIRS.has(topLevel)) {
+    throw new Error(`Manifest is not allowed to write inside protected folder: ${relativePath}`);
+  }
+
   return normalized;
 }
 
-function removeDirContents(dir) {
-  if (!fs.existsSync(dir)) return;
-
-  for (const entry of fs.readdirSync(dir)) {
-    const fullPath = path.join(dir, entry);
-
-    fs.rmSync(fullPath, {
-      recursive: true,
-      force: true,
-    });
-  }
-}
-
-function readLocalManifest(gameDir) {
-  const file = path.join(gameDir, ".launcher-default-manifest.json");
+function readLocalManifest() {
+  const file = path.join(getClientRootDir(), ".launcher-default-manifest.json");
 
   if (!fs.existsSync(file)) {
     return null;
@@ -204,6 +194,40 @@ function readLocalManifest(gameDir) {
   } catch {
     return null;
   }
+}
+
+function getLocalManifestPath() {
+  return path.join(getClientRootDir(), ".launcher-default-manifest.json");
+}
+
+function deleteManagedFilesFromManifest(manifest, clientRoot) {
+  if (!manifest || !Array.isArray(manifest.files)) return [];
+
+  const deleted = [];
+
+  for (const file of manifest.files) {
+    if (!file?.path) continue;
+
+    const relativePath = normalizeManifestPath(file.path);
+    const targetPath = path.join(clientRoot, relativePath);
+
+    if (!targetPath.startsWith(path.resolve(clientRoot) + path.sep)) {
+      continue;
+    }
+
+    if (!fs.existsSync(targetPath)) {
+      continue;
+    }
+
+    fs.rmSync(targetPath, {
+      recursive: true,
+      force: true,
+    });
+
+    deleted.push(relativePath);
+  }
+
+  return deleted;
 }
 
 async function findOrCreateDefaultProfile(manifest) {
@@ -222,7 +246,7 @@ async function findOrCreateDefaultProfile(manifest) {
       customVersionId: manifest.customVersionId || "eclipse-client",
       minMemory: manifest.memory?.min || "2G",
       maxMemory: manifest.memory?.max || "4G",
-      gameDir: path.join(storage.getRootDir(), ".launcher"),
+      gameDir: getClientRootDir(),
     });
   }
 
@@ -234,6 +258,7 @@ async function findOrCreateDefaultProfile(manifest) {
     customVersionId: manifest.customVersionId || profile.customVersionId || "eclipse-client",
     minMemory: manifest.memory?.min || profile.minMemory || "2G",
     maxMemory: manifest.memory?.max || profile.maxMemory || "4G",
+    gameDir: getClientRootDir(),
   });
 
   return profile;
@@ -266,6 +291,8 @@ function validateManifest(manifest) {
     if (!file?.sha256) {
       throw new Error(`Client manifest file is missing sha256: ${file.path}`);
     }
+
+    normalizeManifestPath(file.path);
   }
 }
 
@@ -278,7 +305,7 @@ async function getRemoteManifest() {
 async function getDefaultClientUpdateInfo() {
   const manifest = await getRemoteManifest();
   const profile = await findOrCreateDefaultProfile(manifest);
-  const localManifest = readLocalManifest(profile.gameDir);
+  const localManifest = readLocalManifest();
 
   return {
     manifest,
@@ -290,6 +317,7 @@ async function getDefaultClientUpdateInfo() {
     updateMode: manifest.updateMode || "keep",
     manifestUrl: DEFAULT_MANIFEST_URL,
     baseUrl: CLIENT_UPDATE_BASE_URL,
+    clientRoot: getClientRootDir(),
   };
 }
 
@@ -297,6 +325,10 @@ async function syncDefaultClient(window, options = {}) {
   const send = (payload) => {
     if (window && !window.isDestroyed()) {
       window.webContents.send("clientUpdater:status", payload);
+
+      if (payload.message) {
+        window.webContents.send("game:log", `[client updater] ${payload.message}`);
+      }
     }
   };
 
@@ -308,10 +340,15 @@ async function syncDefaultClient(window, options = {}) {
 
   const manifest = await getRemoteManifest();
   const profile = await findOrCreateDefaultProfile(manifest);
-  const localManifest = readLocalManifest(profile.gameDir);
+  const localManifest = readLocalManifest();
   const updateAvailable = hasClientVersionChanged(localManifest, manifest);
 
   const mode = options.mode || manifest.updateMode || "keep";
+  const clientRoot = getClientRootDir();
+
+  storage.ensureDir(clientRoot);
+  storage.ensureRuntimeDirs();
+  storage.ensureProfileRuntimeDirs(clientRoot);
 
   if (!updateAvailable && !options.force) {
     send({
@@ -319,6 +356,7 @@ async function syncDefaultClient(window, options = {}) {
       message: "Default client is already up to date.",
       updatedFiles: [],
       skippedFiles: [],
+      clientRoot,
     });
 
     return {
@@ -327,28 +365,29 @@ async function syncDefaultClient(window, options = {}) {
       profile,
       updatedFiles: [],
       skippedFiles: [],
+      clientRoot,
     };
   }
+
+  let deletedFiles = [];
 
   if (mode === "delete") {
     send({
       type: "deleting",
-      message: "Deleting old Default installation...",
+      message: "Deleting old managed client files...",
+      clientRoot,
     });
 
-    removeDirContents(profile.gameDir);
+    deletedFiles = deleteManagedFilesFromManifest(localManifest || manifest, clientRoot);
   }
 
-  const gameDir = profile.gameDir;
-  storage.ensureDir(gameDir);
-
-  const localManifestPath = path.join(gameDir, ".launcher-default-manifest.json");
+  const localManifestPath = getLocalManifestPath();
   const updatedFiles = [];
   const skippedFiles = [];
 
   for (const file of manifest.files) {
     const relativePath = normalizeManifestPath(file.path);
-    const targetPath = path.join(gameDir, relativePath);
+    const targetPath = path.join(clientRoot, relativePath);
     const currentHash = sha256File(targetPath);
     const expectedHash = String(file.sha256 || "").toLowerCase();
 
@@ -364,6 +403,7 @@ async function syncDefaultClient(window, options = {}) {
       message: `Downloading ${relativePath}`,
       file: relativePath,
       url: downloadUrl,
+      clientRoot,
     });
 
     const buffer = await fetchBuffer(downloadUrl);
@@ -386,6 +426,8 @@ async function syncDefaultClient(window, options = {}) {
     message: `Default client updated. Updated ${updatedFiles.length} file(s).`,
     updatedFiles,
     skippedFiles,
+    deletedFiles,
+    clientRoot,
   });
 
   return {
@@ -394,6 +436,8 @@ async function syncDefaultClient(window, options = {}) {
     profile,
     updatedFiles,
     skippedFiles,
+    deletedFiles,
+    clientRoot,
   };
 }
 

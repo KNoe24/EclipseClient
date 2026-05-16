@@ -17,20 +17,29 @@ function getRootDir() {
 }
 
 /*
-  Layout:
+  New layout:
 
-  .test-launcher/
+  .eclipse-client/
     account.json
     profiles.json
     skins.json
+
+    assets/
+    cache/
+    libraries/
+    versions/
+
+    config/
+    logs/
+    mods/
+    resourcepacks/
+    saves/
+    screenshots/
+    shaderpacks/
+
     profile-icons/
     skins/
     profiles/
-      .runtime/
-        assets/
-        cache/
-        libraries/
-        versions/
       ProfileName/
         config/
         logs/
@@ -40,8 +49,8 @@ function getRootDir() {
         screenshots/
         shaderpacks/
 
-  Minecraft runtime files are shared in profiles/.runtime.
-  Per-installation game data stays inside each profile folder.
+  The default client/runtime now lives directly inside .eclipse-client.
+  Old .eclipse-client/profiles/.runtime is no longer used for new files.
 */
 
 function getClientsDir() {
@@ -54,8 +63,13 @@ function getProfilesRootDir() {
   return dir;
 }
 
+/*
+  IMPORTANT:
+  Runtime root is now .eclipse-client directly.
+  This makes versions/assets/libraries/cache save directly under .eclipse-client.
+*/
 function getRuntimeRootDir() {
-  const dir = path.join(getProfilesRootDir(), ".runtime");
+  const dir = getRootDir();
   ensureDir(dir);
   return dir;
 }
@@ -78,7 +92,8 @@ function getRuntimeVersionsDir() {
 
 /*
   Legacy shared versions directory.
-  Kept only so old installs can be detected and migrated.
+  Kept so old code/imports still work.
+  Now this is the same as getRuntimeVersionsDir().
 */
 function getVersionsDir() {
   const dir = path.join(getRootDir(), "versions");
