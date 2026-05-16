@@ -2783,7 +2783,15 @@ function initSkinEditorEvents() {
 }
 
 function getDroppedJarPaths(event) {
-  return Array.from(event.dataTransfer?.files || [])
+  const files = Array.from(event.dataTransfer?.files || []);
+
+  if (window.launcherAPI?.mods?.getDroppedFilePaths) {
+    return window.launcherAPI.mods
+      .getDroppedFilePaths(files)
+      .filter(filePath => filePath.toLowerCase().endsWith(".jar"));
+  }
+
+  return files
     .filter(file => file.name.toLowerCase().endsWith(".jar"))
     .map(file => file.path)
     .filter(Boolean);
@@ -3366,23 +3374,32 @@ async function initEvents() {
 
   const editorModsDropZone = $("#editorModsDropZone");
   if (editorModsDropZone) {
-    editorModsDropZone.addEventListener("dragover", event => {
-      event.preventDefault();
-      editorModsDropZone.classList.add("drag-over");
+    ["dragenter", "dragover"].forEach(eventName => {
+      editorModsDropZone.addEventListener(eventName, event => {
+        event.preventDefault();
+        event.stopPropagation();
+        event.dataTransfer.dropEffect = "copy";
+        editorModsDropZone.classList.add("drag-over");
+      });
     });
 
-    editorModsDropZone.addEventListener("dragleave", () => {
-      editorModsDropZone.classList.remove("drag-over");
+    ["dragleave", "dragend"].forEach(eventName => {
+      editorModsDropZone.addEventListener(eventName, event => {
+        event.preventDefault();
+        event.stopPropagation();
+        editorModsDropZone.classList.remove("drag-over");
+      });
     });
 
     editorModsDropZone.addEventListener("drop", async event => {
       event.preventDefault();
+      event.stopPropagation();
       editorModsDropZone.classList.remove("drag-over");
 
-      const paths = getDroppedJarPaths(event);
+      const paths = [...new Set(getDroppedJarPaths(event))];
 
       if (paths.length === 0) {
-        alert("Drop .jar files from your file manager.");
+        alert("Drop one or more .jar files from your file manager.");
         return;
       }
 
@@ -3713,6 +3730,13 @@ async function initEvents() {
   });
 }
 
+window.addEventListener("dragover", event => {
+  event.preventDefault();
+});
+
+window.addEventListener("drop", event => {
+  event.preventDefault();
+});
 async function boot() {
   await loadSystemMemoryInfo();
   await initEvents();

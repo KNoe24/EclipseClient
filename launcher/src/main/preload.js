@@ -1,4 +1,4 @@
-const { contextBridge, ipcRenderer } = require("electron");
+const { contextBridge, ipcRenderer, webUtils } = require("electron");
 
 contextBridge.exposeInMainWorld("launcherAPI", {
   system: {
@@ -40,6 +40,12 @@ contextBridge.exposeInMainWorld("launcherAPI", {
 
   mods: {
     list: profileId => ipcRenderer.invoke("mods:list", profileId),
+
+    getDroppedFilePaths: files => {
+      return Array.from(files || [])
+        .map(file => webUtils.getPathForFile(file))
+        .filter(Boolean);
+    },
 
     add: (profileId, filePaths = null) => {
       return ipcRenderer.invoke("mods:add", profileId, filePaths);
