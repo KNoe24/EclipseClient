@@ -2868,13 +2868,90 @@ async function checkDefaultClientInfoManually() {
     );
 
     setStatus("Default client update available.");
+
+    if (info.updateMode === "ask") {
+      showUpdateModePrompt(info);
+    }
   } catch (error) {
     setUpdateStatus(`Default client check failed: ${error.message || error}`);
     setStatus("Default client check failed.");
-    alert(error.message || "Default client check failed.");
+    appendConsole(`[client updater] Check failed: ${error.message || error}`);
+  }
+}
+async function checkDefaultClientInfoManually() {
+  try {
+    const info = await window.launcherAPI.clientUpdater.getDefaultInfo();
+
+    if (!info.updateAvailable) {
+      setUpdateStatus(
+        `Default client is up to date. Version: ${info.remoteClientVersion || "unknown"}`
+      );
+      setStatus("Default client is already up to date.");
+      return;
+    }
+
+    setUpdateStatus(
+      `Default client update available: ${info.localClientVersion || "none"} → ${info.remoteClientVersion || "new"}. ` +
+        `Server mode: ${info.updateMode || "keep"}.`
+    );
+
+    setStatus("Default client update available.");
+
+    if (info.updateMode === "ask") {
+      showUpdateModePrompt(info);
+    }
+  } catch (error) {
+    setUpdateStatus(`Default client check failed: ${error.message || error}`);
+    setStatus("Default client check failed.");
+    // Don't show alert on boot, just log it
+    appendConsole(`[client updater] Check failed: ${error.message || error}`);
   }
 }
 
+function showUpdateModePrompt(info) {
+  const backdrop = document.createElement("div");
+  backdrop.className = "update-mode-backdrop";
+  backdrop.innerHTML = `
+    <div class="update-mode-dialog mcsection shadow">
+      <p class="update-mode-title whitetext mct">Client Update Available</p>
+      
+      <p class="update-mode-message whitetext mcr">
+        Would you like to install this update?<br/>
+        <span class="update-version-info mcr">${escapeHtml(info.localClientVersion || "current")} → ${escapeHtml(info.remoteClientVersion || "new")}</span>
+      </p>
+      
+      <div class="update-mode-buttons">
+        <button id="updateModeKeepBtn" class=" update-mode-btn mcbtn primary" type="button">
+          Keep Files
+        </button>
+        <button id="updateModeDeleteBtn" class=" update-mode-btn mcbtn danger" type="button">
+          Delete & Install
+        </button>
+      </div>
+    </div>
+  `;
+
+  document.body.appendChild(backdrop);
+
+  const keepBtn = backdrop.querySelector("#updateModeKeepBtn");
+  const deleteBtn = backdrop.querySelector("#updateModeDeleteBtn");
+
+  keepBtn.addEventListener("click", async () => {
+    backdrop.remove();
+    await syncDefaultClient("keep", true);
+  });
+
+  deleteBtn.addEventListener("click", async () => {
+    backdrop.remove();
+    await syncDefaultClient("delete", true);
+  });
+
+  backdrop.addEventListener("click", (event) => {
+    if (event.target === backdrop) {
+      backdrop.remove();
+    }
+  });
+}
 async function handleLogin() {
   const loginBtn = $("#loginBtn");
 
@@ -3749,7 +3826,7 @@ async function boot() {
 
   await loadServerStatuses();
   setInterval(loadServerStatuses, 60000);
-
+  await checkDefaultClientInfoManually();
   setStatus("Ready.");
   appendConsole("[launcher] Renderer loaded.");
 }

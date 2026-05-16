@@ -2899,3 +2899,74 @@ select.editor-input {
   height: 0 !important;
   display: none !important;
 }
+.update-mode-backdrop {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.75);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.update-mode-dialog {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 24px;
+  border: 1px solid #242936;
+  background: #151923;
+  max-width: 420px;
+  min-width: 350px;
+}
+
+.update-mode-title {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.update-mode-message {
+  margin: 0;
+  line-height: 1.5;
+}
+
+.update-version-info {
+  display: block;
+  margin-top: 8px;
+  color: #4f7cff;
+  font-weight: 500;
+}
+
+.update-mode-buttons {
+  display: flex;
+  gap: 12px;
+  margin-top: 8px;
+}
+
+.update-mode-btn {
+  flex: 1;
+  font-weight: 350;
+  cursor: pointer;
+}
+
+.update-mode-btn.primary {
+  background: #4f7cff;
+  color: #fff;
+}
+
+.update-mode-btn.primary:hover {
+  background: #6b91ff;
+}
+
+.update-mode-btn.danger {
+  background: #7f2632;
+  color: #f4f6fb;
+}
+
+.update-mode-btn.danger:hover {
+  background: #a33242;
+}
