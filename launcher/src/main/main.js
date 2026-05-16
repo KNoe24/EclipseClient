@@ -499,7 +499,9 @@ async function applyCape(capeId) {
 
       return {
         ok: false,
-        warning: `Skin was applied, but cape could not be cleared. HTTP ${response.status}: ${text || response.statusText}`,
+        warning: `Skin was applied, but cape could not be cleared. HTTP ${response.status}: ${
+          text || response.statusText
+        }`,
       };
     }
 
@@ -525,7 +527,9 @@ async function applyCape(capeId) {
 
     return {
       ok: false,
-      warning: `Skin was applied, but cape could not be activated. HTTP ${response.status}: ${text || response.statusText}`,
+      warning: `Skin was applied, but cape could not be activated. HTTP ${response.status}: ${
+        text || response.statusText
+      }`,
     };
   }
 
@@ -786,7 +790,9 @@ async function checkDefaultClientOnStartup() {
 
     mainWindow.webContents.send("clientUpdater:status", {
       type: "choice-required",
-      message: `Default client update available: ${info.localClientVersion || "none"} → ${info.remoteClientVersion || "new"}`,
+      message: `Default client update available: ${
+        info.localClientVersion || "none"
+      } → ${info.remoteClientVersion || "new"}`,
       localClientVersion: info.localClientVersion,
       remoteClientVersion: info.remoteClientVersion,
     });
@@ -829,6 +835,10 @@ function createWindow() {
   });
 
   mainWindow.loadFile(path.join(__dirname, "../renderer/index.html"));
+
+  mainWindow.webContents.openDevTools({
+    mode: "detach",
+  });
 
   updaterService.bindWindow(mainWindow);
 

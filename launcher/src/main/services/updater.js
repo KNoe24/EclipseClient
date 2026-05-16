@@ -22,6 +22,19 @@ function configureFeed() {
   });
 }
 
+function sendToAppConsole(message) {
+  console.log(message);
+
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+
+  /*
+    This sends the message to your app's Console tab,
+    because your preload already exposes:
+    window.launcherAPI.events.onGameLog(...)
+  */
+  mainWindow.webContents.send("game:log", message);
+}
+
 function sendStatus(type, data = {}) {
   const payload = {
     type,
@@ -33,6 +46,43 @@ function sendStatus(type, data = {}) {
   if (!mainWindow || mainWindow.isDestroyed()) return;
 
   mainWindow.webContents.send("updater:status", payload);
+
+  if (type === "manual-check-started") {
+    sendToAppConsole(
+      `[launcher updater] Checking launcher updates... Current version: ${data.appVersion || app.getVersion()}`
+    );
+  }
+
+  if (type === "checking") {
+    sendToAppConsole("[launcher updater] Contacting update server...");
+  }
+
+  if (type === "available") {
+    sendToAppConsole(
+      `[launcher updater] Update available: ${data.info?.version || "unknown version"}`
+    );
+  }
+
+  if (type === "not-available") {
+    sendToAppConsole("[launcher updater] Launcher is up to date.");
+  }
+
+  if (type === "download-progress") {
+    const percent = Math.round(data.progress?.percent || 0);
+    sendToAppConsole(`[launcher updater] Downloading launcher update: ${percent}%`);
+  }
+
+  if (type === "downloaded") {
+    sendToAppConsole("[launcher updater] Launcher update downloaded. Restart to install.");
+  }
+
+  if (type === "dev-mode") {
+    sendToAppConsole(`[launcher updater] ${data.message}`);
+  }
+
+  if (type === "error") {
+    sendToAppConsole(`[launcher updater error] ${data.message}`);
+  }
 }
 
 function bindWindow(window) {
@@ -61,6 +111,7 @@ function bindWindow(window) {
   autoUpdater.on("error", (error) => {
     sendStatus("error", {
       message: error.message || String(error),
+      stack: error.stack || "",
     });
   });
 
@@ -79,7 +130,11 @@ function bindWindow(window) {
 async function check() {
   configureFeed();
 
-  sendStatus("manual-check-started");
+  sendStatus("manual-check-started", {
+    packaged: app.isPackaged,
+    updateUrl: LAUNCHER_UPDATE_URL,
+    appVersion: app.getVersion(),
+  });
 
   if (!app.isPackaged) {
     sendStatus("dev-mode", {
@@ -103,6 +158,7 @@ async function check() {
   } catch (error) {
     sendStatus("error", {
       message: error.message || String(error),
+      stack: error.stack || "",
     });
 
     return {
@@ -116,9 +172,15 @@ async function download() {
   configureFeed();
 
   if (!updateInfo) {
+    const error = "No update available.";
+
+    sendStatus("error", {
+      message: error,
+    });
+
     return {
       ok: false,
-      error: "No update available.",
+      error,
     };
   }
 
@@ -131,6 +193,7 @@ async function download() {
   } catch (error) {
     sendStatus("error", {
       message: error.message || String(error),
+      stack: error.stack || "",
     });
 
     return {
@@ -150,6 +213,7 @@ async function install() {
   } catch (error) {
     sendStatus("error", {
       message: error.message || String(error),
+      stack: error.stack || "",
     });
 
     return {
