@@ -12,7 +12,9 @@
     "build:win": "electron-builder --win nsis --x64",
     "build:mac": "electron-builder --mac dmg",
     "build:linux": "electron-builder --linux AppImage",
-    "dist": "electron-builder"
+    "dist": "electron-builder",
+    "push": "node scripts/git-push.js",
+    "push:start": "node scripts/git-push.js --start"
   },
   "dependencies": {
     "discord-rpc": "4.0.1",
