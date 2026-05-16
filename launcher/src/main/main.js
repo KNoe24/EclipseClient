@@ -16,6 +16,10 @@ const discordService = require("./services/discord");
 const javaService = require("./services/java");
 const storage = require("./services/storage");
 
+if (process.platform === "win32") {
+  app.setAppUserModelId("cc.wawe.eclipse-launcher");
+}
+
 let mainWindow = null;
 
 const SKINS_FILE = "skins.json";
@@ -31,16 +35,29 @@ const MINECRAFT_PROFILE_CACHE_MS = 60 * 1000;
 /* Window / App                                                               */
 /* -------------------------------------------------------------------------- */
 
+function firstExistingPath(paths) {
+  return paths.find((filePath) => fsSync.existsSync(filePath)) || paths[0];
+}
+
 function getWindowIconPath() {
   if (process.platform === "win32") {
-    return path.join(__dirname, "../../build/icon.ico");
+    return firstExistingPath([
+      path.join(__dirname, "../renderer/static/img/icon.ico"),
+      path.join(__dirname, "../../build/icon.ico"),
+    ]);
   }
 
   if (process.platform === "darwin") {
-    return path.join(__dirname, "../../build/icon.icns");
+    return firstExistingPath([
+      path.join(__dirname, "../renderer/static/img/icon.icns"),
+      path.join(__dirname, "../../build/icon.icns"),
+    ]);
   }
 
-  return path.join(__dirname, "../../build/icon.png");
+  return firstExistingPath([
+    path.join(__dirname, "../renderer/static/img/icon.png"),
+    path.join(__dirname, "../../build/icon.png"),
+  ]);
 }
 
 function sendClientUpdaterError(error) {
@@ -796,11 +813,11 @@ function createWindow() {
     title: "Eclipse Launcher",
     icon: getWindowIconPath(),
     backgroundColor: "#111318",
-    titleBarStyle: "hidden", // Hides native title bar on macOS, keeps window controls
+    titleBarStyle: "hidden",
     titleBarOverlay: {
-      color: "#111318", // Background color of the title bar/controls area
-      symbolColor: "#ffffff", // Color of the window control buttons (minimize, close, etc.)
-      height: 35, // Optional: Height of the title bar area
+      color: "#111318",
+      symbolColor: "#ffffff",
+      height: 35,
     },
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),
