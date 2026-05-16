@@ -836,10 +836,6 @@ function createWindow() {
 
   mainWindow.loadFile(path.join(__dirname, "../renderer/index.html"));
 
-  mainWindow.webContents.openDevTools({
-    mode: "detach",
-  });
-
   updaterService.bindWindow(mainWindow);
 
   mainWindow.webContents.once("did-finish-load", async () => {
