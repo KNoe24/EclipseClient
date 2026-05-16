@@ -3,25 +3,121 @@ const path = require("path");
 const crypto = require("crypto");
 const https = require("https");
 const http = require("http");
+const { URL } = require("url");
 
 const storage = require("./storage");
 const profileService = require("./profiles");
 
-const DEFAULT_MANIFEST_URL = "https://launcher.wawe.cc/launcher/default/manifest.json";
+/*
+  Default client updates
+  ----------------------
+  This uses the client branch of your GitHub update repo.
 
-function fetchBuffer(url) {
+  Branch URL shown in browser:
+    https://github.com/KNoe24/eclipse-updates/tree/client
+
+  Raw manifest URL used by the launcher:
+    https://raw.githubusercontent.com/KNoe24/eclipse-updates/client/manifest.json
+
+  Recommended client branch layout:
+    manifest.json
+    versions/eclipse-client/eclipse-client.json
+    versions/eclipse-client/eclipse-client.jar
+    mods/example.jar
+    config/example.json
+
+  In manifest.json, each file can either include a full URL, a relative URL,
+  or no URL at all. If no URL is given, this updater downloads from the same
+  path in the GitHub client branch.
+*/
+const CLIENT_UPDATE_BASE_URL =
+  process.env.ECLIPSE_CLIENT_UPDATE_BASE_URL ||
+  "https://raw.githubusercontent.com/KNoe24/eclipse-updates/client";
+
+const DEFAULT_MANIFEST_URL =
+  process.env.ECLIPSE_CLIENT_MANIFEST_URL || `${CLIENT_UPDATE_BASE_URL}/manifest.json`;
+
+const MAX_REDIRECTS = 8;
+
+function isHttpUrl(value) {
+  return /^https?:\/\//i.test(String(value || ""));
+}
+
+function encodePathForUrl(relativePath) {
+  return String(relativePath || "")
+    .split(/[\\/]+/)
+    .filter(Boolean)
+    .map((part) => encodeURIComponent(part))
+    .join("/");
+}
+
+function joinUrl(baseUrl, relativePath) {
+  const cleanBase = String(baseUrl || "").replace(/\/+$/, "");
+  return `${cleanBase}/${encodePathForUrl(relativePath)}`;
+}
+
+function resolveDownloadUrl(file) {
+  const url = String(file?.url || "").trim();
+
+  if (isHttpUrl(url)) {
+    return url;
+  }
+
+  if (url) {
+    return joinUrl(CLIENT_UPDATE_BASE_URL, url);
+  }
+
+  return joinUrl(CLIENT_UPDATE_BASE_URL, file.path);
+}
+
+function fetchBuffer(url, redirectCount = 0) {
   return new Promise((resolve, reject) => {
-    const client = url.startsWith("https:") ? https : http;
+    if (redirectCount > MAX_REDIRECTS) {
+      reject(new Error(`Too many redirects while downloading ${url}`));
+      return;
+    }
 
-    client
-      .get(url, (response) => {
-        if (response.statusCode >= 300 && response.statusCode < 400 && response.headers.location) {
-          fetchBuffer(response.headers.location).then(resolve).catch(reject);
+    let parsedUrl;
+
+    try {
+      parsedUrl = new URL(url);
+    } catch {
+      reject(new Error(`Invalid URL: ${url}`));
+      return;
+    }
+
+    if (parsedUrl.protocol !== "https:" && parsedUrl.protocol !== "http:") {
+      reject(new Error(`Unsupported URL protocol: ${parsedUrl.protocol}`));
+      return;
+    }
+
+    const client = parsedUrl.protocol === "https:" ? https : http;
+
+    const request = client.get(
+      parsedUrl,
+      {
+        headers: {
+          "User-Agent": "eclipse-client-launcher",
+          Accept: "application/octet-stream, application/json, */*",
+          "Cache-Control": "no-cache",
+        },
+      },
+      (response) => {
+        const statusCode = response.statusCode || 0;
+
+        if (statusCode >= 300 && statusCode < 400 && response.headers.location) {
+          response.resume();
+
+          const redirectUrl = new URL(response.headers.location, parsedUrl).toString();
+          fetchBuffer(redirectUrl, redirectCount + 1)
+            .then(resolve)
+            .catch(reject);
           return;
         }
 
-        if (response.statusCode < 200 || response.statusCode >= 300) {
-          reject(new Error(`Download failed: ${url} returned ${response.statusCode}`));
+        if (statusCode < 200 || statusCode >= 300) {
+          response.resume();
+          reject(new Error(`Download failed: ${url} returned HTTP ${statusCode}`));
           return;
         }
 
@@ -34,8 +130,14 @@ function fetchBuffer(url) {
         response.on("end", () => {
           resolve(Buffer.concat(chunks));
         });
-      })
-      .on("error", reject);
+      }
+    );
+
+    request.on("error", reject);
+
+    request.setTimeout(45000, () => {
+      request.destroy(new Error(`Download timed out: ${url}`));
+    });
   });
 }
 
@@ -63,9 +165,14 @@ function ensureParentDir(filePath) {
 }
 
 function normalizeManifestPath(relativePath) {
-  const normalized = path.normalize(relativePath);
+  const normalized = path.normalize(String(relativePath || ""));
 
-  if (normalized.startsWith("..") || path.isAbsolute(normalized)) {
+  if (
+    !normalized ||
+    normalized === "." ||
+    normalized.startsWith("..") ||
+    path.isAbsolute(normalized)
+  ) {
     throw new Error(`Unsafe manifest path: ${relativePath}`);
   }
 
@@ -112,7 +219,7 @@ async function findOrCreateDefaultProfile(manifest) {
       minecraftVersion: manifest.minecraftVersion || "1.21.1",
       versionType: manifest.versionType || "release",
       loaderType: manifest.loaderType || "custom",
-      customVersionId: manifest.customVersionId || "default-client",
+      customVersionId: manifest.customVersionId || "eclipse-client",
       minMemory: manifest.memory?.min || "2G",
       maxMemory: manifest.memory?.max || "4G",
       gameDir: path.join(storage.getRootDir(), ".launcher"),
@@ -124,7 +231,7 @@ async function findOrCreateDefaultProfile(manifest) {
     minecraftVersion: manifest.minecraftVersion || profile.minecraftVersion || "1.21.1",
     versionType: manifest.versionType || profile.versionType || "release",
     loaderType: manifest.loaderType || profile.loaderType || "custom",
-    customVersionId: manifest.customVersionId || profile.customVersionId || "default-client",
+    customVersionId: manifest.customVersionId || profile.customVersionId || "eclipse-client",
     minMemory: manifest.memory?.min || profile.minMemory || "2G",
     maxMemory: manifest.memory?.max || profile.maxMemory || "4G",
   });
@@ -138,8 +245,38 @@ function hasClientVersionChanged(localManifest, remoteManifest) {
   return String(localManifest.clientVersion || "") !== String(remoteManifest.clientVersion || "");
 }
 
-async function getDefaultClientUpdateInfo() {
+function validateManifest(manifest) {
+  if (!manifest || typeof manifest !== "object") {
+    throw new Error("Client manifest is empty or invalid.");
+  }
+
+  if (!manifest.clientVersion) {
+    throw new Error("Client manifest is missing clientVersion.");
+  }
+
+  if (!Array.isArray(manifest.files)) {
+    throw new Error("Client manifest is missing files array.");
+  }
+
+  for (const file of manifest.files) {
+    if (!file?.path) {
+      throw new Error("Client manifest contains a file without a path.");
+    }
+
+    if (!file?.sha256) {
+      throw new Error(`Client manifest file is missing sha256: ${file.path}`);
+    }
+  }
+}
+
+async function getRemoteManifest() {
   const manifest = await fetchJson(DEFAULT_MANIFEST_URL);
+  validateManifest(manifest);
+  return manifest;
+}
+
+async function getDefaultClientUpdateInfo() {
+  const manifest = await getRemoteManifest();
   const profile = await findOrCreateDefaultProfile(manifest);
   const localManifest = readLocalManifest(profile.gameDir);
 
@@ -151,6 +288,8 @@ async function getDefaultClientUpdateInfo() {
     localClientVersion: localManifest?.clientVersion || null,
     remoteClientVersion: manifest.clientVersion || null,
     updateMode: manifest.updateMode || "keep",
+    manifestUrl: DEFAULT_MANIFEST_URL,
+    baseUrl: CLIENT_UPDATE_BASE_URL,
   };
 }
 
@@ -164,9 +303,10 @@ async function syncDefaultClient(window, options = {}) {
   send({
     type: "checking",
     message: "Checking default client files...",
+    manifestUrl: DEFAULT_MANIFEST_URL,
   });
 
-  const manifest = await fetchJson(DEFAULT_MANIFEST_URL);
+  const manifest = await getRemoteManifest();
   const profile = await findOrCreateDefaultProfile(manifest);
   const localManifest = readLocalManifest(profile.gameDir);
   const updateAvailable = hasClientVersionChanged(localManifest, manifest);
@@ -206,30 +346,30 @@ async function syncDefaultClient(window, options = {}) {
   const updatedFiles = [];
   const skippedFiles = [];
 
-  for (const file of manifest.files || []) {
+  for (const file of manifest.files) {
     const relativePath = normalizeManifestPath(file.path);
     const targetPath = path.join(gameDir, relativePath);
     const currentHash = sha256File(targetPath);
+    const expectedHash = String(file.sha256 || "").toLowerCase();
 
-    if (
-      mode !== "delete" &&
-      currentHash &&
-      currentHash.toLowerCase() === file.sha256.toLowerCase()
-    ) {
+    if (mode !== "delete" && currentHash && currentHash.toLowerCase() === expectedHash) {
       skippedFiles.push(relativePath);
       continue;
     }
+
+    const downloadUrl = resolveDownloadUrl(file);
 
     send({
       type: "downloading",
       message: `Downloading ${relativePath}`,
       file: relativePath,
+      url: downloadUrl,
     });
 
-    const buffer = await fetchBuffer(file.url);
+    const buffer = await fetchBuffer(downloadUrl);
     const downloadedHash = sha256Buffer(buffer);
 
-    if (downloadedHash.toLowerCase() !== file.sha256.toLowerCase()) {
+    if (downloadedHash.toLowerCase() !== expectedHash) {
       throw new Error(`Hash mismatch for ${relativePath}`);
     }
 

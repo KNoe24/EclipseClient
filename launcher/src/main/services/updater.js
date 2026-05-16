@@ -1,24 +1,43 @@
 const { app } = require("electron");
 const { autoUpdater } = require("electron-updater");
 
+const LAUNCHER_UPDATE_URL = "https://raw.githubusercontent.com/KNoe24/eclipse-updates/launcher/";
+
 let mainWindow = null;
 let updateInfo = null;
 let eventsBound = false;
+let feedConfigured = false;
 
 autoUpdater.autoDownload = true;
 autoUpdater.autoInstallOnAppQuit = true;
 
-function sendStatus(type, data = {}) {
-  if (!mainWindow || mainWindow.isDestroyed()) return;
+function configureFeed() {
+  if (feedConfigured) return;
 
-  mainWindow.webContents.send("updater:status", {
+  feedConfigured = true;
+
+  autoUpdater.setFeedURL({
+    provider: "generic",
+    url: LAUNCHER_UPDATE_URL,
+  });
+}
+
+function sendStatus(type, data = {}) {
+  const payload = {
     type,
     ...data,
-  });
+  };
+
+  console.log("[launcher updater]", payload);
+
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+
+  mainWindow.webContents.send("updater:status", payload);
 }
 
 function bindWindow(window) {
   mainWindow = window;
+  configureFeed();
 
   if (eventsBound) {
     return;
@@ -58,6 +77,10 @@ function bindWindow(window) {
 }
 
 async function check() {
+  configureFeed();
+
+  sendStatus("manual-check-started");
+
   if (!app.isPackaged) {
     sendStatus("dev-mode", {
       message: "Auto-updater only works in packaged builds.",
@@ -70,15 +93,28 @@ async function check() {
     };
   }
 
-  const result = await autoUpdater.checkForUpdates();
+  try {
+    const result = await autoUpdater.checkForUpdates();
 
-  return {
-    ok: true,
-    result,
-  };
+    return {
+      ok: true,
+      result,
+    };
+  } catch (error) {
+    sendStatus("error", {
+      message: error.message || String(error),
+    });
+
+    return {
+      ok: false,
+      error: error.message || String(error),
+    };
+  }
 }
 
 async function download() {
+  configureFeed();
+
   if (!updateInfo) {
     return {
       ok: false,
@@ -86,19 +122,41 @@ async function download() {
     };
   }
 
-  await autoUpdater.downloadUpdate();
+  try {
+    await autoUpdater.downloadUpdate();
 
-  return {
-    ok: true,
-  };
+    return {
+      ok: true,
+    };
+  } catch (error) {
+    sendStatus("error", {
+      message: error.message || String(error),
+    });
+
+    return {
+      ok: false,
+      error: error.message || String(error),
+    };
+  }
 }
 
 async function install() {
-  autoUpdater.quitAndInstall(false, true);
+  try {
+    autoUpdater.quitAndInstall(false, true);
 
-  return {
-    ok: true,
-  };
+    return {
+      ok: true,
+    };
+  } catch (error) {
+    sendStatus("error", {
+      message: error.message || String(error),
+    });
+
+    return {
+      ok: false,
+      error: error.message || String(error),
+    };
+  }
 }
 
 module.exports = {

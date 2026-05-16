@@ -64,7 +64,7 @@
     "publish": [
       {
         "provider": "generic",
-        "url": "https://launcher.wawe.cc/launcher/updates/"
+        "url": "https://raw.githubusercontent.com/KNoe24/eclipse-updates/launcher/"
       }
     ]
   }
