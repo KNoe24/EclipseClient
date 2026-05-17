@@ -151,6 +151,16 @@ function sha256Buffer(buffer) {
   return crypto.createHash("sha256").update(buffer).digest("hex");
 }
 
+// Helper to determine if a written file is a raw LFS string pointer
+function isLfsPointer(buffer) {
+  return buffer.toString("utf8").startsWith("version https://git-lfs.github.com");
+}
+
+// Converts a raw content URL into a GitHub Media LFS asset delivery stream
+function convertToLfsMediaUrl(url) {
+  return url.replace("raw.githubusercontent.com", "media.githubusercontent.com/media");
+}
+
 function ensureParentDir(filePath) {
   fs.mkdirSync(path.dirname(filePath), { recursive: true });
 }
@@ -396,7 +406,7 @@ async function syncDefaultClient(window, options = {}) {
       continue;
     }
 
-    const downloadUrl = resolveDownloadUrl(file);
+    let downloadUrl = resolveDownloadUrl(file);
 
     send({
       type: "downloading",
@@ -406,7 +416,23 @@ async function syncDefaultClient(window, options = {}) {
       clientRoot,
     });
 
-    const buffer = await fetchBuffer(downloadUrl);
+    // Download file content buffer
+    let buffer = await fetchBuffer(downloadUrl);
+
+    // Git LFS pointer intercept logic
+    if (isLfsPointer(buffer)) {
+      send({
+        type: "downloading",
+        message: `Redirecting Git LFS tracking for ${relativePath}...`,
+        file: relativePath,
+        url: downloadUrl,
+        clientRoot,
+      });
+
+      const mediaUrl = convertToLfsMediaUrl(downloadUrl);
+      buffer = await fetchBuffer(mediaUrl);
+    }
+
     const downloadedHash = sha256Buffer(buffer);
 
     if (downloadedHash.toLowerCase() !== expectedHash) {
