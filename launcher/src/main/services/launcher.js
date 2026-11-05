@@ -7,6 +7,7 @@ const { Client } = require("minecraft-launcher-core");
 const authService = require("./auth");
 const profileService = require("./profiles");
 const storage = require("./storage");
+const javaRuntime = require("./javaRuntime");
 
 const instances = new Map();
 const instanceListeners = new Set();
@@ -1264,9 +1265,7 @@ async function launch(profileId, window) {
         },
       };
 
-      if (profile.javaPath) {
-        options.javaPath = profile.javaPath;
-      }
+      options.javaPath = await javaRuntime.resolveJavaForLaunch(profile, customVersionId, log);
 
       const jvmArgs = splitArgs(profile.extraJvmArgs);
       const mcArgs = splitArgs(profile.extraMcArgs);
@@ -1333,6 +1332,13 @@ async function launch(profileId, window) {
   }
 }
 
+async function checkJava(profileId) {
+  const profile = await profileService.getProfileById(profileId);
+  const customVersionId = getCustomVersionId(profile, "");
+
+  return javaRuntime.checkJava(profile, customVersionId);
+}
+
 async function kill(instanceId = null) {
   const targets = instanceId
     ? [instances.get(instanceId)].filter(Boolean)
@@ -1355,6 +1361,7 @@ async function kill(instanceId = null) {
 
 module.exports = {
   launch,
+  checkJava,
   isRunning,
   listInstances,
   onInstancesChanged,

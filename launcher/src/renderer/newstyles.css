@@ -4481,7 +4481,20 @@ select.editor-input {
   width: 0.9rem;
   height: 0.6rem;
   background: #cfcfcf;
-  clip-path: polygon(0 0, 100% 0, 100% 34%, 83% 34%, 83% 67%, 67% 67%, 67% 100%, 33% 100%, 33% 67%, 17% 67%, 17% 34%, 0 34%);
+  clip-path: polygon(
+    0 0,
+    100% 0,
+    100% 34%,
+    83% 34%,
+    83% 67%,
+    67% 67%,
+    67% 100%,
+    33% 100%,
+    33% 67%,
+    17% 67%,
+    17% 34%,
+    0 34%
+  );
   transition: transform 0.12s steps(2, end);
 }
 
@@ -4752,4 +4765,117 @@ select.editor-input {
   .widget-pvphq-stat {
     padding: 0.15rem 0.35rem;
   }
+}
+
+.java-prompt-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 2500;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+
+  background: rgba(0, 0, 0, 0.75);
+}
+
+.java-prompt-backdrop.hidden {
+  display: none;
+}
+
+.java-prompt {
+  width: min(32rem, 100%);
+  margin: 0;
+  box-sizing: border-box;
+  padding: clamp(1rem, 2.4vw, 1.5rem);
+
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+
+  border-top: 0.25rem solid #ffaa00;
+  animation: onboarding-in 0.18s steps(3, end);
+}
+
+.java-prompt p {
+  margin: 0;
+}
+
+.java-prompt-title {
+  color: #ffaa00 !important;
+  font-size: clamp(1.15rem, 0.8vw + 0.95rem, 1.5rem);
+}
+
+.java-prompt-text {
+  color: #e0e0e0;
+  line-height: 1.4;
+}
+
+.java-prompt-question {
+  margin-top: 0.2rem !important;
+}
+
+.java-prompt-note {
+  color: #9a9a9a;
+  font-size: 0.85rem;
+  line-height: 1.4;
+}
+
+.java-prompt-progress {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.java-prompt-progress.hidden,
+.java-prompt-error.hidden {
+  display: none;
+}
+
+.java-prompt-bar {
+  height: 0.75rem;
+  background: #111;
+  border: 0.125rem solid #000;
+  overflow: hidden;
+}
+
+.java-prompt-bar span {
+  display: block;
+  height: 100%;
+  width: 0%;
+  background: #418123;
+  box-shadow: inset 0 0.1875rem 0 rgba(255, 255, 255, 0.2);
+  transition: width 0.2s steps(4, end);
+}
+
+.java-prompt-progress-text {
+  color: #c7c7c7;
+  font-size: 0.85rem;
+}
+
+.java-prompt-error {
+  color: #ff5555;
+  font-size: 0.9rem;
+}
+
+.java-prompt-buttons {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.6rem;
+  margin-top: 0.3rem;
+}
+
+.java-prompt-buttons .mcbtn {
+  min-height: 2.6rem;
+  font-size: clamp(0.85rem, 0.5vw + 0.7rem, 1.05rem);
+}
+
+.java-prompt-buttons .green {
+  background: #418123;
+}
+
+.java-prompt-buttons .mcbtn:disabled {
+  opacity: 0.55;
+  cursor: default;
 }

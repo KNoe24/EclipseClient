@@ -3804,6 +3804,13 @@ async function initEvents() {
           if (!again) return;
         }
 
+        const javaReady = await ensureJavaBeforeLaunch(selectedProfile);
+
+        if (!javaReady) {
+          setStatus("Launch cancelled: Java is needed to play.");
+          return;
+        }
+
         flyRocket();
         startFakeLaunchProgress();
 
@@ -4314,7 +4321,8 @@ function moveMcSelectFocus(direction) {
   if (items.length === 0) return;
 
   const current = items.indexOf(document.activeElement);
-  const start = current === -1 ? items.findIndex((item) => item.classList.contains("selected")) : current;
+  const start =
+    current === -1 ? items.findIndex((item) => item.classList.contains("selected")) : current;
   const next = items[(start + direction + items.length) % items.length];
 
   next.focus();
@@ -4434,7 +4442,10 @@ function initMcSelects() {
         return;
       }
 
-      if (open.menu.contains(document.activeElement) || document.activeElement === open.entry.button) {
+      if (
+        open.menu.contains(document.activeElement) ||
+        document.activeElement === open.entry.button
+      ) {
         if (event.key === "ArrowDown" || event.key === "ArrowUp") {
           event.preventDefault();
           event.stopPropagation();
@@ -4711,8 +4722,7 @@ function unmountWidget(id) {
 
   try {
     mounted.cleanup?.();
-  } catch {
-  }
+  } catch {}
 
   mounted.element.remove();
   homeWidgets.mounted.delete(id);
@@ -4810,7 +4820,9 @@ function moveWidget(id, targetIndex) {
 }
 
 async function getServerStatus(ip) {
-  const address = String(ip || "").trim().toLowerCase();
+  const address = String(ip || "")
+    .trim()
+    .toLowerCase();
   if (!address) return null;
 
   const cached = homeWidgets.serverStatusCache.get(address);
@@ -4841,7 +4853,8 @@ function formatPlayerNumber(value) {
 }
 
 function widgetSkinSource() {
-  if (!state.account?.username || state.account.type === "offline") return { skin: DEFAULT_STEVE_SKIN, cape: "", slim: false };
+  if (!state.account?.username || state.account.type === "offline")
+    return { skin: DEFAULT_STEVE_SKIN, cape: "", slim: false };
 
   const skin = getCurrentSkinFromMinecraftProfile();
   const cape = getActiveCapeFromMinecraftProfile?.();
@@ -4859,8 +4872,7 @@ async function ensureSkinProfileForWidgets() {
 
   try {
     state.skins.minecraftProfile = await window.launcherAPI.skins.getMinecraftProfile();
-  } catch {
-  }
+  } catch {}
 }
 
 async function ensureLatestMinecraftVersions() {
@@ -4990,8 +5002,9 @@ const WIDGET_RENDERERS = {
 
     update(body, settings) {
       const key =
-        String(settings.player || "").trim().toLowerCase() ||
-        `account:${state.account?.uuid || state.account?.username || ""}`;
+        String(settings.player || "")
+          .trim()
+          .toLowerCase() || `account:${state.account?.uuid || state.account?.username || ""}`;
       const cached = homeWidgets.pvphqResults.get(key);
 
       this.draw(body, settings, cached || { loading: true });
@@ -5110,7 +5123,8 @@ const WIDGET_RENDERERS = {
       position.textContent =
         settings.showPosition && ladder.position ? `#${formatPlayerNumber(ladder.position)}` : "";
 
-      if (!ladder.placed) addStat("Placements", `${ladder.placementGames}/${ladder.placementTarget}`);
+      if (!ladder.placed)
+        addStat("Placements", `${ladder.placementGames}/${ladder.placementTarget}`);
       if (settings.showElo) addStat("Elo", formatPlayerNumber(ladder.rating));
       if (settings.showTr) addStat("TR", formatPlayerNumber(ladder.tr));
       if (settings.showPeak) addStat("Peak", formatPlayerNumber(ladder.peak));
@@ -5122,7 +5136,9 @@ const WIDGET_RENDERERS = {
         footer.push(
           `Global ${result.globalRank || ""}${
             result.globalPosition ? ` #${formatPlayerNumber(result.globalPosition)}` : ""
-          }`.replace(/\s+/g, " ").trim()
+          }`
+            .replace(/\s+/g, " ")
+            .trim()
         );
       }
 
@@ -5486,7 +5502,8 @@ function buildWidgetSettingsForm(id) {
 
     const apply = () => {
       if (input.type === "checkbox") settings[key] = input.checked;
-      else if (input.type === "range" || input.type === "number") settings[key] = Number(input.value);
+      else if (input.type === "range" || input.type === "number")
+        settings[key] = Number(input.value);
       else settings[key] = input.value.trim();
 
       saveHomeWidgetConfig();
@@ -5822,7 +5839,10 @@ function renderDeveloperInstances() {
     list.length === 0
       ? "None."
       : list
-          .map((instance) => `${instance.profileName} #${instance.number} (${instance.status}, pid ${instance.pid || "?"})`)
+          .map(
+            (instance) =>
+              `${instance.profileName} #${instance.number} (${instance.status}, pid ${instance.pid || "?"})`
+          )
           .join(" · ");
 }
 
@@ -6076,8 +6096,7 @@ function renderOnboardingStep() {
   const dots = $("#onboardingDots");
   if (dots) {
     dots.innerHTML = ONBOARDING_STEPS.map((_, index) => {
-      const cls =
-        index === onboarding.index ? "current" : index < onboarding.index ? "done" : "";
+      const cls = index === onboarding.index ? "current" : index < onboarding.index ? "done" : "";
       return `<span class="onboarding-dot ${cls}"></span>`;
     }).join("");
   }
@@ -6088,7 +6107,8 @@ function renderOnboardingStep() {
   const next = $("#onboardingNextBtn");
   if (next) {
     if (step === "welcome") next.textContent = "Get started";
-    else if (step === "account") next.textContent = state.account?.username ? "Next" : "Skip for now";
+    else if (step === "account")
+      next.textContent = state.account?.username ? "Next" : "Skip for now";
     else if (step === "done") next.textContent = "Finish";
     else next.textContent = "Next";
   }
@@ -6240,6 +6260,127 @@ function initOnboardingEvents() {
   });
 }
 
+function formatMegabytes(bytes) {
+  return `${Math.max(1, Math.round(Number(bytes || 0) / 1048576))} MB`;
+}
+
+function showJavaInstallPrompt(profile, check) {
+  const backdrop = $("#javaPromptBackdrop");
+  const installBtn = $("#javaPromptInstallBtn");
+  const cancelBtn = $("#javaPromptCancelBtn");
+  const progress = $("#javaPromptProgress");
+  const bar = $("#javaPromptBar");
+  const progressText = $("#javaPromptProgressText");
+  const errorText = $("#javaPromptError");
+
+  const major = check.required?.majorVersion || "";
+  const component = check.required?.component || "";
+
+  $("#javaPromptText").textContent =
+    `${profile.name} runs Minecraft ${profile.minecraftVersion}, which needs Java ${major}. ` +
+    `No Java ${major} was found on this PC.`;
+
+  installBtn.textContent = "Install Java";
+  installBtn.disabled = false;
+  cancelBtn.disabled = false;
+  progress.classList.add("hidden");
+  errorText.classList.add("hidden");
+  bar.style.width = "0%";
+  backdrop.classList.remove("hidden");
+  installBtn.focus();
+
+  return new Promise((resolve) => {
+    let installing = false;
+
+    const finish = (value) => {
+      backdrop.classList.add("hidden");
+      installBtn.removeEventListener("click", onInstall);
+      cancelBtn.removeEventListener("click", onCancel);
+      document.removeEventListener("keydown", onKey, true);
+      resolve(value);
+    };
+
+    const onCancel = () => {
+      if (!installing) finish(false);
+    };
+
+    const onKey = (event) => {
+      if (event.key === "Escape" && !installing) {
+        event.stopPropagation();
+        finish(false);
+      }
+    };
+
+    const onInstall = async () => {
+      installing = true;
+      installBtn.disabled = true;
+      cancelBtn.disabled = true;
+      installBtn.textContent = "Installing...";
+      errorText.classList.add("hidden");
+      progress.classList.remove("hidden");
+      progressText.textContent = `Preparing Java ${major}...`;
+
+      try {
+        await window.launcherAPI.java.install(component);
+
+        bar.style.width = "100%";
+        progressText.textContent = `Java ${major} installed. Starting ${profile.name}...`;
+        setStatus(`Java ${major} installed.`);
+
+        setTimeout(() => finish(true), 600);
+      } catch (error) {
+        installing = false;
+        installBtn.disabled = false;
+        cancelBtn.disabled = false;
+        installBtn.textContent = "Try again";
+        errorText.textContent = friendlyErrorMessage(error, "Java could not be installed.");
+        errorText.classList.remove("hidden");
+      }
+    };
+
+    installBtn.addEventListener("click", onInstall);
+    cancelBtn.addEventListener("click", onCancel);
+    document.addEventListener("keydown", onKey, true);
+  });
+}
+
+async function ensureJavaBeforeLaunch(profile) {
+  let check;
+
+  try {
+    check = await window.launcherAPI.java.checkForProfile(profile.id);
+  } catch (error) {
+    appendConsole(`[java] Java check failed: ${friendlyErrorMessage(error)}`);
+    return true;
+  }
+
+  if (check?.ok) return true;
+
+  if (check?.reason === "custom-missing") {
+    alert(check.message);
+    return false;
+  }
+
+  appendConsole(`[java] ${check?.message || "Java not detected."}`);
+
+  return showJavaInstallPrompt(profile, check || {});
+}
+
+function initJavaInstallProgress() {
+  window.launcherAPI.java.onInstallProgress?.((data) => {
+    const bar = $("#javaPromptBar");
+    const text = $("#javaPromptProgressText");
+
+    if (bar) bar.style.width = `${Math.min(100, Math.max(0, data.percent || 0))}%`;
+
+    if (text && data.totalBytes) {
+      text.textContent = `Downloading Java ${data.version || ""}: ${formatMegabytes(data.doneBytes)} of ${formatMegabytes(
+        data.totalBytes
+      )} (${data.percent || 0}%)`;
+    }
+  });
+}
+
 async function boot() {
   initMcSelects();
   await loadSystemMemoryInfo();
@@ -6248,6 +6389,7 @@ async function boot() {
   await loadProfiles();
 
   initHomeWidgets();
+  initJavaInstallProgress();
   initDataFolderSetting();
   initDeveloperScreen();
   initOnboardingEvents();

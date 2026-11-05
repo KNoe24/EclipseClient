@@ -41,19 +41,39 @@ const LADDER_KEYS = {
 };
 
 const TIER_ORDER = [
-  "LT5", "MT5", "HT5",
-  "LT4", "MT4", "HT4",
-  "LT3", "MT3", "HT3",
-  "LT2", "MT2", "HT2",
-  "LT1", "MT1", "HT1",
+  "LT5",
+  "MT5",
+  "HT5",
+  "LT4",
+  "MT4",
+  "HT4",
+  "LT3",
+  "MT3",
+  "HT3",
+  "LT2",
+  "MT2",
+  "HT2",
+  "LT1",
+  "MT1",
+  "HT1",
 ];
 
 const TIER_COLORS = {
-  LT5: "#4C3822", MT5: "#705332", HT5: "#936D42",
-  LT4: "#64686B", MT4: "#83888C", HT4: "#A2A9AD",
-  LT3: "#9E5A32", MT3: "#BF6C3D", HT3: "#DD7E46",
-  LT2: "#64728C", MT2: "#7C8DAD", HT2: "#92A5CC",
-  LT1: "#BF942F", MT1: "#DDAB37", HT1: "#FFC53F",
+  LT5: "#4C3822",
+  MT5: "#705332",
+  HT5: "#936D42",
+  LT4: "#64686B",
+  MT4: "#83888C",
+  HT4: "#A2A9AD",
+  LT3: "#9E5A32",
+  MT3: "#BF6C3D",
+  HT3: "#DD7E46",
+  LT2: "#64728C",
+  MT2: "#7C8DAD",
+  HT2: "#92A5CC",
+  LT1: "#BF942F",
+  MT1: "#DDAB37",
+  HT1: "#FFC53F",
 };
 
 const cache = new Map();
@@ -64,7 +84,9 @@ function userAgent() {
 }
 
 function normalizeUuid(value) {
-  const hex = String(value || "").replace(/-/g, "").toLowerCase();
+  const hex = String(value || "")
+    .replace(/-/g, "")
+    .toLowerCase();
   if (!/^[0-9a-f]{32}$/.test(hex)) return "";
   return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
 }
@@ -135,7 +157,10 @@ function tierRank(tier) {
 }
 
 function parseLadder(apiKey, entry) {
-  const raw = String(apiKey || "").trim().toUpperCase().replace(/[-\s]/g, "_");
+  const raw = String(apiKey || "")
+    .trim()
+    .toUpperCase()
+    .replace(/[-\s]/g, "_");
   const key = LADDER_KEYS[raw] || raw;
 
   const wins = number(entry.wins);

@@ -1,6 +1,6 @@
 {
   "name": "eclipse-client",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Eclipse Client",
   "main": "src/main/main.js",
   "author": "KNeo24",

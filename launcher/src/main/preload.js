@@ -40,6 +40,11 @@ contextBridge.exposeInMainWorld("launcherAPI", {
 
   java: {
     list: () => ipcRenderer.invoke("java:list"),
+    checkForProfile: (profileId) => ipcRenderer.invoke("java:checkForProfile", profileId),
+    install: (component) => ipcRenderer.invoke("java:install", component),
+    onInstallProgress: (callback) => {
+      ipcRenderer.on("java:installProgress", (_event, data) => callback(data));
+    },
   },
 
   mods: {

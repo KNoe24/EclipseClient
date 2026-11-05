@@ -8,6 +8,7 @@ const { app, BrowserWindow, ipcMain, dialog, Menu, shell } = require("electron")
 
 const authService = require("./services/auth");
 const pvphqService = require("./services/pvphq");
+const javaRuntimeService = require("./services/javaRuntime");
 const launcherService = require("./services/launcher");
 const profileService = require("./services/profiles");
 const modsService = require("./services/mods");
@@ -1007,7 +1008,8 @@ app.whenReady().then(async () => {
       const renaming = requestedName !== current.name;
       const movingDir =
         Boolean(requestedDir) &&
-        path.resolve(requestedDir).toLowerCase() !== path.resolve(current.gameDir || "").toLowerCase();
+        path.resolve(requestedDir).toLowerCase() !==
+          path.resolve(current.gameDir || "").toLowerCase();
 
       if (renaming || movingDir) {
         throw new Error("Stop this installation before renaming it or changing its game folder.");
@@ -1264,6 +1266,24 @@ app.whenReady().then(async () => {
 
   ipcMain.handle("launcher:listInstances", async () => {
     return launcherService.listInstances();
+  });
+
+  ipcMain.handle("java:checkForProfile", async (_event, profileId) => {
+    return launcherService.checkJava(profileId);
+  });
+
+  ipcMain.handle("java:install", async (_event, component) => {
+    const send = (channel, data) => {
+      if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send(channel, data);
+    };
+
+    const javaPath = await javaRuntimeService.installRuntime(
+      String(component || ""),
+      (line) => send("game:log", line),
+      (progress) => send("java:installProgress", progress)
+    );
+
+    return { ok: true, javaPath };
   });
 
   ipcMain.handle("launcher:kill", async (_event, instanceId = null) => {
