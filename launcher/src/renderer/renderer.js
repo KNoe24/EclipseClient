@@ -796,7 +796,15 @@ function renderProfileDropup() {
     const button = document.createElement("button");
     button.type = "button";
     button.className = "profile-dropup-item";
-    button.textContent = profile.name;
+    button.title = profile.name;
+    button.innerHTML = `
+      ${renderInstallationIconHtml(profile)}
+      <span class="profile-dropup-item-text">
+        <span class="profile-dropup-item-name mct">${escapeHtml(profile.name)}</span>
+        <span class="profile-dropup-item-sub mcr">${escapeHtml(loaderLabel(profile.loaderType))} · ${escapeHtml(profile.minecraftVersion || "?")}</span>
+      </span>
+      <span class="mc-select-check" aria-hidden="true"></span>
+    `;
 
     if (profile.id === selectedProfileId()) {
       button.classList.add("selected");
@@ -1793,12 +1801,22 @@ async function renderEditorMods() {
 
   if (!root || !profileId) return;
 
-  root.innerHTML = `<div class="whitetext mcr">Loading mods...</div>`;
+  const scrollers = [root, root.closest(".editor-subpage")].filter(Boolean);
+  const savedScroll = scrollers.map((element) => element.scrollTop);
+
+  if (!root.querySelector(".editor-mod-row")) {
+    root.innerHTML = `<div class="whitetext mcr">Loading mods...</div>`;
+  }
+
+  const restoreScroll = () => {
+    scrollers.forEach((element, index) => {
+      element.scrollTop = savedScroll[index];
+    });
+  };
 
   try {
     const mods = await window.launcherAPI.mods.list(profileId);
-
-    root.innerHTML = "";
+    const fragment = document.createDocumentFragment();
 
     if (!mods || mods.length === 0) {
       root.innerHTML = `<div class="whitetext mcr">No mods installed for this installation.</div>`;
@@ -1826,7 +1844,9 @@ async function renderEditorMods() {
         </button>
       `;
 
-      row.querySelector('[data-action="toggle"]').addEventListener("click", async () => {
+      row.querySelector('[data-action="toggle"]').addEventListener("click", async (event) => {
+        event.currentTarget.disabled = true;
+
         try {
           await window.launcherAPI.mods.setEnabled(profileId, mod.filename, !mod.enabled);
 
@@ -1848,8 +1868,11 @@ async function renderEditorMods() {
         }
       });
 
-      root.appendChild(row);
+      fragment.appendChild(row);
     }
+
+    root.replaceChildren(fragment);
+    restoreScroll();
   } catch (error) {
     root.innerHTML = `<div class="whitetext mcr">Failed to load mods.</div>`;
   }
@@ -4120,6 +4143,304 @@ window.addEventListener("drop", (event) => {
   event.preventDefault();
 });
 
+const mcSelectState = {
+  open: null,
+  enhanced: new WeakMap(),
+};
+
+const nativeSelectValue = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value");
+const nativeSelectIndex = Object.getOwnPropertyDescriptor(
+  HTMLSelectElement.prototype,
+  "selectedIndex"
+);
+
+function mcSelectTemplate(id) {
+  return document.getElementById(id).content.firstElementChild.cloneNode(true);
+}
+
+function syncMcSelect(select) {
+  const entry = mcSelectState.enhanced.get(select);
+  if (!entry) return;
+
+  const option = select.options[nativeSelectIndex.get.call(select)];
+  entry.label.textContent = option ? option.textContent : "";
+  entry.wrapper.classList.toggle("disabled", select.disabled);
+  entry.button.disabled = select.disabled;
+  entry.button.title = option ? option.textContent : "";
+
+  if (mcSelectState.open?.select === select) renderMcSelectMenu(select);
+}
+
+function closeMcSelect() {
+  const open = mcSelectState.open;
+  if (!open) return;
+
+  open.menu.remove();
+  open.entry.wrapper.classList.remove("open", "open-up");
+  open.entry.button.setAttribute("aria-expanded", "false");
+  mcSelectState.open = null;
+}
+
+function chooseMcSelectOption(select, index) {
+  const option = select.options[index];
+  if (!option || option.disabled) return;
+
+  const changed = nativeSelectIndex.get.call(select) !== index;
+  nativeSelectIndex.set.call(select, index);
+  syncMcSelect(select);
+  closeMcSelect();
+
+  mcSelectState.enhanced.get(select)?.button.focus();
+
+  if (changed) {
+    select.dispatchEvent(new Event("input", { bubbles: true }));
+    select.dispatchEvent(new Event("change", { bubbles: true }));
+  }
+}
+
+function renderMcSelectMenu(select) {
+  const open = mcSelectState.open;
+  if (!open) return;
+
+  const { menu } = open;
+  const selectedIndex = nativeSelectIndex.get.call(select);
+
+  menu.innerHTML = "";
+
+  let lastGroup = null;
+
+  Array.from(select.options).forEach((option, index) => {
+    const group = option.parentElement?.tagName === "OPTGROUP" ? option.parentElement : null;
+
+    if (group && group !== lastGroup) {
+      const header = mcSelectTemplate("mcSelectGroupTemplate");
+      header.textContent = group.label;
+      menu.appendChild(header);
+    }
+
+    lastGroup = group;
+
+    const item = mcSelectTemplate("mcSelectOptionTemplate");
+    item.querySelector(".mc-select-option-label").textContent = option.textContent;
+    item.dataset.index = String(index);
+    item.disabled = option.disabled;
+    item.classList.toggle("selected", index === selectedIndex);
+    item.setAttribute("aria-selected", index === selectedIndex ? "true" : "false");
+
+    item.addEventListener("click", () => chooseMcSelectOption(select, index));
+    menu.appendChild(item);
+  });
+
+  if (select.options.length === 0) {
+    const empty = mcSelectTemplate("mcSelectGroupTemplate");
+    empty.textContent = "Nothing to choose";
+    menu.appendChild(empty);
+  }
+}
+
+function positionMcSelectMenu() {
+  const open = mcSelectState.open;
+  if (!open) return;
+
+  const rect = open.entry.button.getBoundingClientRect();
+  const menu = open.menu;
+  const gap = 4;
+  const margin = 8;
+
+  menu.style.minWidth = `${rect.width}px`;
+  menu.style.maxWidth = `${Math.max(rect.width, Math.min(28 * 16, window.innerWidth - margin * 2))}px`;
+
+  const spaceBelow = window.innerHeight - rect.bottom - margin;
+  const spaceAbove = rect.top - margin;
+  const wanted = Math.min(menu.scrollHeight, 18 * 16);
+  const openUp = spaceBelow < wanted && spaceAbove > spaceBelow;
+
+  menu.style.maxHeight = `${Math.max(120, Math.min(18 * 16, openUp ? spaceAbove : spaceBelow) - gap)}px`;
+  menu.style.top = openUp ? "" : `${rect.bottom + gap}px`;
+  menu.style.bottom = openUp ? `${window.innerHeight - rect.top + gap}px` : "";
+
+  const left = Math.min(rect.left, window.innerWidth - menu.offsetWidth - margin);
+  menu.style.left = `${Math.max(margin, left)}px`;
+
+  menu.classList.toggle("open-up", openUp);
+  open.entry.wrapper.classList.toggle("open-up", openUp);
+}
+
+function openMcSelect(select) {
+  const entry = mcSelectState.enhanced.get(select);
+  if (!entry || select.disabled) return;
+
+  closeMcSelect();
+  closeProfileDropup?.();
+
+  const menu = mcSelectTemplate("mcSelectMenuTemplate");
+  document.body.appendChild(menu);
+
+  mcSelectState.open = { select, entry, menu };
+  entry.wrapper.classList.add("open");
+  entry.button.setAttribute("aria-expanded", "true");
+
+  renderMcSelectMenu(select);
+  positionMcSelectMenu();
+
+  menu.querySelector(".mc-select-option.selected")?.scrollIntoView({ block: "nearest" });
+}
+
+function moveMcSelectFocus(direction) {
+  const open = mcSelectState.open;
+  if (!open) return;
+
+  const items = Array.from(open.menu.querySelectorAll(".mc-select-option:not(:disabled)"));
+  if (items.length === 0) return;
+
+  const current = items.indexOf(document.activeElement);
+  const start =
+    current === -1 ? items.findIndex((item) => item.classList.contains("selected")) : current;
+  const next = items[(start + direction + items.length) % items.length];
+
+  next.focus();
+  next.scrollIntoView({ block: "nearest" });
+}
+
+function enhanceSelect(select) {
+  if (mcSelectState.enhanced.has(select) || select.classList.contains("no-mc-select")) return;
+
+  const wrapper = mcSelectTemplate("mcSelectTemplate");
+  const button = wrapper.querySelector(".mc-select-button");
+  const label = wrapper.querySelector(".mc-select-label");
+
+  if (select.id) wrapper.dataset.for = select.id;
+  wrapper.classList.add(...Array.from(select.classList).filter((name) => name !== "editor-input"));
+
+  select.classList.add("mc-select-native");
+  select.tabIndex = -1;
+  select.setAttribute("aria-hidden", "true");
+  select.insertAdjacentElement("afterend", wrapper);
+
+  mcSelectState.enhanced.set(select, { wrapper, button, label });
+
+  Object.defineProperty(select, "value", {
+    configurable: true,
+    get() {
+      return nativeSelectValue.get.call(this);
+    },
+    set(value) {
+      nativeSelectValue.set.call(this, value);
+      syncMcSelect(this);
+    },
+  });
+
+  Object.defineProperty(select, "selectedIndex", {
+    configurable: true,
+    get() {
+      return nativeSelectIndex.get.call(this);
+    },
+    set(value) {
+      nativeSelectIndex.set.call(this, value);
+      syncMcSelect(this);
+    },
+  });
+
+  new MutationObserver(() => syncMcSelect(select)).observe(select, {
+    childList: true,
+    subtree: true,
+    attributes: true,
+    attributeFilter: ["disabled", "selected", "label"],
+  });
+
+  select.addEventListener("change", () => syncMcSelect(select));
+
+  button.addEventListener("click", (event) => {
+    event.stopPropagation();
+
+    if (mcSelectState.open?.select === select) closeMcSelect();
+    else openMcSelect(select);
+  });
+
+  button.addEventListener("keydown", (event) => {
+    if (["ArrowDown", "ArrowUp", "Enter", " "].includes(event.key)) {
+      event.preventDefault();
+      event.stopPropagation();
+
+      if (mcSelectState.open?.select !== select) openMcSelect(select);
+      moveMcSelectFocus(event.key === "ArrowUp" ? -1 : 1);
+    }
+  });
+
+  syncMcSelect(select);
+}
+
+function enhanceSelectsIn(root) {
+  if (!root) return;
+
+  if (root.tagName === "SELECT") {
+    enhanceSelect(root);
+    return;
+  }
+
+  root.querySelectorAll?.("select").forEach(enhanceSelect);
+}
+
+function initMcSelects() {
+  enhanceSelectsIn(document.body);
+
+  new MutationObserver((mutations) => {
+    for (const mutation of mutations) {
+      mutation.addedNodes.forEach((node) => {
+        if (node.nodeType === Node.ELEMENT_NODE) enhanceSelectsIn(node);
+      });
+    }
+  }).observe(document.body, { childList: true, subtree: true });
+
+  document.addEventListener("mousedown", (event) => {
+    const open = mcSelectState.open;
+    if (!open) return;
+
+    if (!open.menu.contains(event.target) && !open.entry.wrapper.contains(event.target)) {
+      closeMcSelect();
+    }
+  });
+
+  document.addEventListener(
+    "keydown",
+    (event) => {
+      const open = mcSelectState.open;
+      if (!open) return;
+
+      if (event.key === "Escape") {
+        event.preventDefault();
+        event.stopPropagation();
+        closeMcSelect();
+        open.entry.button.focus();
+        return;
+      }
+
+      if (
+        open.menu.contains(document.activeElement) ||
+        document.activeElement === open.entry.button
+      ) {
+        if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+          event.preventDefault();
+          event.stopPropagation();
+          moveMcSelectFocus(event.key === "ArrowUp" ? -1 : 1);
+        }
+
+        if (event.key === "Tab") closeMcSelect();
+      }
+    },
+    true
+  );
+
+  window.addEventListener("resize", closeMcSelect);
+  document.addEventListener(
+    "scroll",
+    (event) => {
+      if (mcSelectState.open && !mcSelectState.open.menu.contains(event.target)) closeMcSelect();
+    },
+    true
+  );
+}
+
 const HOME_WIDGETS_KEY = "launcher.homeWidgets.v1";
 const SERVER_STATUS_TTL_MS = 60 * 1000;
 const MINECRAFT_NEWS_URL = "https://www.minecraft.net/en-us/articles";
@@ -4130,6 +4451,7 @@ const DEFAULT_SERVERS = [
   { name: "Hypixel", ip: "hypixel.net" },
   { name: "Hoplite", ip: "hoplite.gg" },
   { name: "DonutSMP", ip: "donutsmp.com" },
+  { name: "pvpHQ", ip: "pvphq.com" },
 ];
 
 const HOME_WIDGET_DEFS = {
@@ -4202,6 +4524,7 @@ function defaultHomeWidgetConfig() {
     order: ids,
     enabled: Object.fromEntries(ids.map((id) => [id, HOME_WIDGET_DEFS[id].defaultEnabled])),
     settings: Object.fromEntries(ids.map((id) => [id, HOME_WIDGET_DEFS[id].defaults()])),
+    knownDefaultServers: DEFAULT_SERVERS.map((server) => server.ip),
   };
 }
 
@@ -4233,7 +4556,26 @@ function loadHomeWidgetConfig() {
     settings[id] = { ...fallback.settings[id], ...(saved.settings?.[id] || {}) };
   }
 
-  return { order, enabled, settings };
+  const knownDefaultServers = Array.isArray(saved.knownDefaultServers)
+    ? saved.knownDefaultServers
+    : DEFAULT_SERVERS.filter((server) => server.ip !== "pvphq.com").map((server) => server.ip);
+
+  const servers = settings.servers.servers;
+
+  for (const server of DEFAULT_SERVERS) {
+    const alreadyListed = servers.some((item) => item.ip.toLowerCase() === server.ip);
+
+    if (!knownDefaultServers.includes(server.ip) && !alreadyListed) {
+      servers.push({ ...server });
+    }
+  }
+
+  return {
+    order,
+    enabled,
+    settings,
+    knownDefaultServers: DEFAULT_SERVERS.map((server) => server.ip),
+  };
 }
 
 function saveHomeWidgetConfig() {
@@ -5080,6 +5422,13 @@ function clearDropMarkers() {
 }
 
 function bindListDrag(row, id) {
+  const grip = row.querySelector(".home-widget-grip");
+
+  row.draggable = false;
+  grip?.addEventListener("mousedown", () => {
+    row.draggable = true;
+  });
+
   row.addEventListener("dragstart", (event) => {
     homeWidgets.dragId = id;
     row.classList.add("dragging");
@@ -5088,6 +5437,7 @@ function bindListDrag(row, id) {
   });
 
   row.addEventListener("dragend", () => {
+    row.draggable = false;
     homeWidgets.dragId = null;
     clearDropMarkers();
   });
@@ -5212,6 +5562,12 @@ function initHomeWidgets() {
 
   document.addEventListener("keydown", (event) => {
     if (event.key === "Escape" && homeWidgets.editing) closeCustomizePanel();
+  });
+
+  document.addEventListener("mouseup", () => {
+    $$('.home-widget-row[draggable="true"]').forEach((row) => {
+      row.draggable = false;
+    });
   });
 
   renderHomeWidgets();
@@ -5699,6 +6055,7 @@ function initOnboardingEvents() {
 }
 
 async function boot() {
+  initMcSelects();
   await loadSystemMemoryInfo();
   await initEvents();
   await loadAccount();

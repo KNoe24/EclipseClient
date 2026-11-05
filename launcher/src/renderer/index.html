@@ -129,7 +129,7 @@
             <div id="profileDropup" class="profile-dropup">
               <button id="profileDropupButton" class="profile-dropup-button mcbtn" type="button">
                 <span id="selectedProfileName">Select Installation</span>
-                <span class="dropup-arrow">▲</span>
+                <span class="dropup-arrow mc-select-arrow" aria-hidden="true"></span>
               </button>
 
               <div id="profileDropupMenu" class="profile-dropup-menu hidden"></div>
@@ -495,6 +495,26 @@
 
           <div class="settings-row">
             <div>
+              <p class="settings-row-title whitetext mct">Test Dropdown</p>
+              <p class="settings-row-desc whitetext mcr">The launcher's dropdown style.</p>
+            </div>
+
+            <select id="testSettingsDropdown">
+              <optgroup label="Blocks">
+                <option value="grass">Grass Block</option>
+                <option value="dirt">Dirt</option>
+                <option value="stone">Stone</option>
+              </optgroup>
+              <optgroup label="Ores">
+                <option value="diamond">Diamond Ore</option>
+                <option value="emerald">Emerald Ore</option>
+                <option value="netherite" disabled>Ancient Debris (locked)</option>
+              </optgroup>
+            </select>
+          </div>
+
+          <div class="settings-row">
+            <div>
               <p class="settings-row-title whitetext mct">Test Slider</p>
               <p class="settings-row-desc whitetext mcr">Move the square along the line.</p>
             </div>
@@ -777,6 +797,35 @@
       </div>
     </div>
 
+    <template id="mcSelectTemplate">
+      <div class="mc-select">
+        <button
+          class="mc-select-button mcr"
+          type="button"
+          aria-haspopup="listbox"
+          aria-expanded="false"
+        >
+          <span class="mc-select-label"></span>
+          <span class="mc-select-arrow" aria-hidden="true"></span>
+        </button>
+      </div>
+    </template>
+
+    <template id="mcSelectMenuTemplate">
+      <div class="mc-select-menu" role="listbox"></div>
+    </template>
+
+    <template id="mcSelectOptionTemplate">
+      <button class="mc-select-option mcr" type="button" role="option">
+        <span class="mc-select-check" aria-hidden="true"></span>
+        <span class="mc-select-option-label"></span>
+      </button>
+    </template>
+
+    <template id="mcSelectGroupTemplate">
+      <div class="mc-select-group mct"></div>
+    </template>
+
     <template id="widgetShellTemplate">
       <article class="home-widget mcsection">
         <header class="home-widget-head">
@@ -806,7 +855,7 @@
     </template>
 
     <template id="widgetListRowTemplate">
-      <div class="home-widget-row" draggable="true">
+      <div class="home-widget-row">
         <div class="home-widget-row-main">
           <span class="home-widget-grip" aria-hidden="true">⋮⋮</span>
           <span class="home-widget-row-name mct whitetext"></span>
