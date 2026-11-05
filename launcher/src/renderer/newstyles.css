@@ -4481,7 +4481,20 @@ select.editor-input {
   width: 0.9rem;
   height: 0.6rem;
   background: #cfcfcf;
-  clip-path: polygon(0 0, 100% 0, 100% 34%, 83% 34%, 83% 67%, 67% 67%, 67% 100%, 33% 100%, 33% 67%, 17% 67%, 17% 34%, 0 34%);
+  clip-path: polygon(
+    0 0,
+    100% 0,
+    100% 34%,
+    83% 34%,
+    83% 67%,
+    67% 67%,
+    67% 100%,
+    33% 100%,
+    33% 67%,
+    17% 67%,
+    17% 34%,
+    0 34%
+  );
   transition: transform 0.12s steps(2, end);
 }
 
@@ -4865,4 +4878,95 @@ select.editor-input {
 .java-prompt-buttons .mcbtn:disabled {
   opacity: 0.55;
   cursor: default;
+}
+
+.app-dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 4000;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+
+  background: rgba(0, 0, 0, 0.7);
+}
+
+.app-dialog-backdrop.hidden {
+  display: none;
+}
+
+.app-dialog {
+  width: min(30rem, 100%);
+  margin: 0;
+  box-sizing: border-box;
+  padding: clamp(1rem, 2.4vw, 1.4rem);
+
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+
+  border-top: 0.25rem solid #418123;
+  animation: onboarding-in 0.16s steps(3, end);
+}
+
+.app-dialog.kind-error,
+.app-dialog.kind-danger {
+  border-top-color: #c62828;
+}
+
+.app-dialog.kind-warning {
+  border-top-color: #ffaa00;
+}
+
+.app-dialog p {
+  margin: 0;
+}
+
+.app-dialog-title {
+  font-size: clamp(1.05rem, 0.7vw + 0.9rem, 1.35rem);
+}
+
+.app-dialog.kind-error .app-dialog-title,
+.app-dialog.kind-danger .app-dialog-title {
+  color: #ff5555 !important;
+}
+
+.app-dialog.kind-warning .app-dialog-title {
+  color: #ffaa00 !important;
+}
+
+.app-dialog-message {
+  max-height: 50vh;
+  overflow-y: auto;
+  color: #e0e0e0;
+  line-height: 1.45;
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+}
+
+.app-dialog-buttons {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.6rem;
+  margin-top: 0.25rem;
+}
+
+.app-dialog-buttons .mcbtn {
+  min-width: 6rem;
+  min-height: 2.6rem;
+  font-size: clamp(0.85rem, 0.5vw + 0.7rem, 1.05rem);
+}
+
+.app-dialog-buttons .hidden {
+  display: none;
+}
+
+#appDialogOkBtn {
+  background: #418123;
+}
+
+.app-dialog.kind-danger #appDialogOkBtn {
+  background: #7a2525;
 }

@@ -195,22 +195,35 @@ function setPlayerHead(account, forceRefresh = false) {
   }
 
   if (account && account.uuid && account.type !== "offline") {
-    const uuid = encodeURIComponent(String(account.uuid));
-
-    head.src =
-      `https://api.mineatar.io/face/${uuid}` +
-      `?scale=4&overlay=true&format=png&refresh=${playerHeadRefreshToken}`;
+    const url = playerFaceUrl(account.uuid);
 
     head.onerror = () => {
       head.onerror = null;
       head.src = DEFAULT_PLAYER_HEAD;
     };
 
+    if (forceRefresh) {
+      fetch(url, { cache: "reload", mode: "no-cors" })
+        .catch(() => {})
+        .then(() => {
+          if (state.account?.uuid !== account.uuid) return;
+          head.removeAttribute("src");
+          head.src = url;
+        });
+    }
+
+    head.src = url;
+
     return;
   }
 
   head.src = DEFAULT_PLAYER_HEAD;
 }
+function playerFaceUrl(uuid) {
+  const id = String(uuid || "").replace(/-/g, "");
+  return `https://api.mineatar.io/face/${encodeURIComponent(id)}?scale=32`;
+}
+
 function refreshLoginCardHeadAfterSkinChange() {
   setPlayerHead(state.account, true);
 
@@ -974,12 +987,13 @@ function renderProfilesList() {
       const profiles = state.profilesData?.profiles || [];
 
       if (profiles.length <= 1) {
-        alert("You must keep at least one installation.");
+        showAlert("You must keep at least one installation.");
         return;
       }
 
-      const confirmed = confirm(
-        `Delete installation "${profile.name}"?\n\nThis will also delete its game folder if no other installation uses it.`
+      const confirmed = await showConfirm(
+        `Delete installation "${profile.name}"?\n\nThis will also delete its game folder if no other installation uses it.`,
+        { title: "Delete installation", confirmText: "Delete", danger: true }
       );
 
       if (!confirmed) return;
@@ -990,8 +1004,9 @@ function renderProfilesList() {
         await loadProfiles();
 
         if (result?.folderDeleteError) {
-          alert(
-            `Installation deleted, but the folder could not be deleted:\n${result.folderDeleteError}`
+          showAlert(
+            `Installation deleted, but the folder could not be deleted:\n${result.folderDeleteError}`,
+            { title: "Folder not deleted", kind: "warning" }
           );
           return;
         }
@@ -1010,7 +1025,7 @@ function renderProfilesList() {
 
         appendConsole(`[profiles] Deleted installation ${profile.name}.`);
       } catch (error) {
-        alert(error.message || "Failed to delete installation.");
+        showError(error.message || "Failed to delete installation.");
       }
     });
 
@@ -1801,7 +1816,7 @@ async function saveEditorSettings() {
     setStatus("Installation saved.");
     appendConsole(`[profiles] Saved installation ${updated.name}.`);
   } catch (error) {
-    alert(error.message || "Failed to save installation.");
+    showError(error.message || "Failed to save installation.");
   }
 }
 
@@ -1862,19 +1877,23 @@ async function renderEditorMods() {
 
           await renderEditorMods();
         } catch (error) {
-          alert(error.message || "Failed to toggle mod.");
+          showError(error.message || "Failed to toggle mod.");
         }
       });
 
       row.querySelector('[data-action="remove"]').addEventListener("click", async () => {
-        const confirmed = confirm(`Delete mod "${mod.displayName || mod.filename}"?`);
+        const confirmed = await showConfirm(`Delete mod "${mod.displayName || mod.filename}"?`, {
+          title: "Delete mod",
+          confirmText: "Delete",
+          danger: true,
+        });
         if (!confirmed) return;
 
         try {
           await window.launcherAPI.mods.remove(profileId, mod.filename);
           await renderEditorMods();
         } catch (error) {
-          alert(error.message || "Failed to delete mod.");
+          showError(error.message || "Failed to delete mod.");
         }
       });
 
@@ -1901,7 +1920,7 @@ async function addModsToEditor(filePaths = []) {
 
     await renderEditorMods();
   } catch (error) {
-    alert(error.message || "Failed to add mods.");
+    showError(error.message || "Failed to add mods.");
   }
 }
 
@@ -1950,14 +1969,14 @@ async function updateEditorModsFromModrinthCollection() {
   const button = $("#updateEditorModsVersionBtn");
 
   if (!profileId || !profile) {
-    alert("Open an installation first.");
+    showAlert("Open an installation first.");
     return;
   }
 
   const collectionInput = input?.value.trim() || "";
 
   if (!collectionInput) {
-    alert("Paste a Modrinth collection URL or ID first.");
+    showAlert("Paste a Modrinth collection URL or ID first.");
     input?.focus();
     return;
   }
@@ -1992,7 +2011,7 @@ async function updateEditorModsFromModrinthCollection() {
     const message = error.message || "Failed to update mods from Modrinth.";
     setEditorModrinthUpdateStatus(message);
     appendConsole(`[modrinth error] ${message}`);
-    alert(message);
+    showError(message);
   } finally {
     if (button) {
       button.disabled = false;
@@ -2737,6 +2756,116 @@ async function loadSkinPageData(force = false) {
   }
 }
 
+const appDialogQueue = [];
+let appDialogActive = false;
+
+function showAppDialog(options) {
+  return new Promise((resolve) => {
+    appDialogQueue.push({ ...options, resolve });
+    pumpAppDialog();
+  });
+}
+
+function pumpAppDialog() {
+  if (appDialogActive || appDialogQueue.length === 0) return;
+
+  const item = appDialogQueue.shift();
+  const backdrop = $("#appDialogBackdrop");
+  const dialog = $("#appDialog");
+  const okBtn = $("#appDialogOkBtn");
+  const cancelBtn = $("#appDialogCancelBtn");
+
+  if (!backdrop || !dialog || !okBtn || !cancelBtn) {
+    item.resolve(Boolean(item.cancelText) ? false : true);
+    return;
+  }
+
+  appDialogActive = true;
+
+  const previousFocus = document.activeElement;
+
+  dialog.className = `app-dialog mcsection kind-${item.kind || "info"}`;
+  $("#appDialogTitle").textContent = item.title || "Notice";
+  $("#appDialogMessage").textContent = item.message || "";
+  okBtn.textContent = item.confirmText || "OK";
+  cancelBtn.textContent = item.cancelText || "Cancel";
+  cancelBtn.classList.toggle("hidden", !item.cancelText);
+
+  backdrop.classList.remove("hidden");
+  okBtn.focus();
+
+  const close = (value) => {
+    backdrop.classList.add("hidden");
+    okBtn.removeEventListener("click", onOk);
+    cancelBtn.removeEventListener("click", onCancel);
+    document.removeEventListener("keydown", onKey, true);
+
+    appDialogActive = false;
+    previousFocus?.focus?.();
+    item.resolve(value);
+    pumpAppDialog();
+  };
+
+  const onOk = () => close(true);
+  const onCancel = () => close(false);
+
+  const onKey = (event) => {
+    if (event.key === "Escape") {
+      event.preventDefault();
+      event.stopPropagation();
+      close(item.cancelText ? false : true);
+      return;
+    }
+
+    if (event.key === "Enter" && document.activeElement !== cancelBtn) {
+      event.preventDefault();
+      event.stopPropagation();
+      close(true);
+      return;
+    }
+
+    if (event.key === "Tab") {
+      event.preventDefault();
+      (document.activeElement === okBtn && item.cancelText ? cancelBtn : okBtn).focus();
+    }
+  };
+
+  okBtn.addEventListener("click", onOk);
+  cancelBtn.addEventListener("click", onCancel);
+  document.addEventListener("keydown", onKey, true);
+}
+
+function showAlert(message, options = {}) {
+  return showAppDialog({
+    title: options.title || "Notice",
+    message: friendlyErrorMessage(message, ""),
+    kind: options.kind || "info",
+    confirmText: options.confirmText || "OK",
+  });
+}
+
+function showError(message, options = {}) {
+  return showAlert(message, {
+    title: options.title || "Something went wrong",
+    kind: "error",
+    confirmText: options.confirmText || "OK",
+  });
+}
+
+function showConfirm(message, options = {}) {
+  return showAppDialog({
+    title: options.title || "Are you sure?",
+    message: String(message || ""),
+    kind: options.danger ? "danger" : "warning",
+    confirmText: options.confirmText || "Yes",
+    cancelText: options.cancelText || "Cancel",
+  });
+}
+
+function isLoginCancelled(message) {
+  return /gui\.closed|user cancel|cancell?ed|closed by user/i.test(String(message || ""));
+}
+
 function friendlyErrorMessage(error, fallback = "Something went wrong.") {
   const raw = String(error?.message || error || "").trim();
   const cleaned = raw.replace(/^Error invoking remote method '[^']*':\s*(?:\w*Error:\s*)?/i, "");
@@ -2764,7 +2893,7 @@ async function addCurrentSkinToLibrary() {
   const currentSkin = getCurrentSkinFromMinecraftProfile();
 
   if (!currentSkin?.url || currentSkin.url === DEFAULT_STEVE_SKIN) {
-    alert("No uploaded Minecraft skin was found.");
+    showAlert("No uploaded Minecraft skin was found.");
     return;
   }
 
@@ -2781,7 +2910,7 @@ async function addCurrentSkinToLibrary() {
 
     await loadSkinPageData(true);
   } catch (error) {
-    alert(error.message || "Failed to add current skin.");
+    showError(error.message || "Failed to add current skin.");
   }
 }
 
@@ -2881,7 +3010,7 @@ async function pickSkinFileForEditor() {
     state.skins.editorCanvasDirty = false;
     renderSkinEditorCanvas();
   } catch (error) {
-    alert(error.message || "Failed to pick skin file.");
+    showError(error.message || "Failed to pick skin file.");
   }
 }
 
@@ -2890,7 +3019,7 @@ function openBasicSkinPainter() {
   const source = state.skins.editorImageDataUrl;
 
   if (!canvas || !source) {
-    alert("Browse a skin file first.");
+    showAlert("Browse a skin file first.");
     return;
   }
 
@@ -2973,7 +3102,7 @@ async function saveSkinEditor(useAfterSave = false) {
   const capeId = selectedSkinEditorCapeId();
 
   if (!state.skins.editorImageDataUrl) {
-    alert("Choose a skin PNG first.");
+    showAlert("Choose a skin PNG first.");
     return;
   }
 
@@ -3007,7 +3136,7 @@ async function saveSkinEditor(useAfterSave = false) {
     closeSkinEditor();
     await loadSkinPageData(true);
   } catch (error) {
-    alert(error.message || "Failed to save skin.");
+    showError(error.message || "Failed to save skin.");
   }
 }
 
@@ -3030,10 +3159,10 @@ async function useSkinFromLibrary(skinId) {
 
     if (result?.capeResult?.warning) {
       appendConsole(`[skins warning] ${result.capeResult.warning}`);
-      alert(result.capeResult.warning);
+      showAlert(result.capeResult.warning, { title: "Heads up", kind: "warning" });
     }
   } catch (error) {
-    alert(error.message || "Failed to use skin.");
+    showError(error.message || "Failed to use skin.");
   } finally {
     skinUseInProgress = false;
   }
@@ -3044,13 +3173,17 @@ async function duplicateSkinInLibrary(skinId) {
     await window.launcherAPI.skins.duplicate(skinId);
     await loadSkinPageData(true);
   } catch (error) {
-    alert(error.message || "Failed to duplicate skin.");
+    showError(error.message || "Failed to duplicate skin.");
   }
 }
 
 async function deleteSkinFromLibrary(skinId) {
   const skin = state.skins.library.find((item) => item.id === skinId);
-  const confirmed = confirm(`Delete skin "${skin?.name || "Skin"}"?`);
+  const confirmed = await showConfirm(`Delete skin "${skin?.name || "Skin"}"?`, {
+    title: "Delete skin",
+    confirmText: "Delete",
+    danger: true,
+  });
 
   if (!confirmed) return;
 
@@ -3058,7 +3191,7 @@ async function deleteSkinFromLibrary(skinId) {
     await window.launcherAPI.skins.delete(skinId);
     await loadSkinPageData(true);
   } catch (error) {
-    alert(error.message || "Failed to delete skin.");
+    showError(error.message || "Failed to delete skin.");
   }
 }
 
@@ -3108,8 +3241,9 @@ async function loadServerStatuses() {
 async function syncDefaultClient(mode, force = true) {
   try {
     if (mode === "delete") {
-      const confirmed = confirm(
-        "This will delete the old Default installation folder before downloading the new one. Continue?"
+      const confirmed = await showConfirm(
+        "This will delete the old Default installation folder before downloading the new one. Continue?",
+        { title: "Replace Default installation", confirmText: "Continue", danger: true }
       );
 
       if (!confirmed) return;
@@ -3134,7 +3268,7 @@ async function syncDefaultClient(mode, force = true) {
   } catch (error) {
     setStatus(error.message || "Default client update failed.");
     appendConsole(`[client updater error] ${error.message || error}`);
-    alert(error.message || "Default client update failed.");
+    showError(error.message || "Default client update failed.");
   }
 }
 
@@ -3234,9 +3368,16 @@ async function handleLogin() {
 
     if (!result || !result.ok) {
       const message = result?.error || "Login failed.";
+
+      if (isLoginCancelled(message)) {
+        setStatus("Sign-in cancelled.");
+        appendConsole("[auth] Sign-in window closed before signing in.");
+        return;
+      }
+
       setStatus(message);
       appendConsole(`[auth error] ${message}`);
-      alert(message);
+      showError(message, { title: "Sign-in failed" });
       return;
     }
 
@@ -3248,7 +3389,10 @@ async function handleLogin() {
     if (!refreshedAccount || !refreshedAccount.username) {
       setStatus("Login saved, but the UI could not reload the account.");
       appendConsole("[auth warning] Login saved, but getAccount returned empty.");
-      alert("Login saved, but the UI could not reload the account. Restart the launcher.");
+      showAlert("Login saved, but the UI could not reload the account. Restart the launcher.", {
+        title: "Restart needed",
+        kind: "warning",
+      });
       return;
     }
 
@@ -3263,9 +3407,16 @@ async function handleLogin() {
     return refreshedAccount;
   } catch (error) {
     const message = error.message || String(error);
+
+    if (isLoginCancelled(message)) {
+      setStatus("Sign-in cancelled.");
+      appendConsole("[auth] Sign-in window closed before signing in.");
+      return;
+    }
+
     setStatus(message);
     appendConsole(`[auth error] ${message}`);
-    alert(message);
+    showError(message, { title: "Sign-in failed" });
   } finally {
     if (loginBtn) {
       loginBtn.disabled = false;
@@ -3280,7 +3431,7 @@ async function openExternalLink(url) {
   } catch (error) {
     const message = error.message || String(error);
     appendConsole(`[link error] ${message}`);
-    alert(message);
+    showError(message);
   }
 }
 
@@ -3290,7 +3441,7 @@ async function openEditorInstallationFolder() {
   const folderPath = inputPath || profile?.gameDir || "";
 
   if (!folderPath) {
-    alert("No game directory is set for this installation.");
+    showAlert("No game directory is set for this installation.");
     return;
   }
 
@@ -3302,7 +3453,7 @@ async function openEditorInstallationFolder() {
     await window.launcherAPI.folders.openPath(folderPath);
   } catch (error) {
     appendConsole(`[folder error] ${error.message || error}`);
-    alert(error.message || "Failed to open installation folder.");
+    showError(error.message || "Failed to open installation folder.");
   }
 }
 
@@ -3610,7 +3761,7 @@ async function initEvents() {
 
         updateEditorIconPreview();
       } catch (error) {
-        alert(error.message || "Failed to import icon.");
+        showError(error.message || "Failed to import icon.");
       }
     });
   }
@@ -3734,7 +3885,7 @@ async function initEvents() {
       const paths = [...new Set(getDroppedJarPaths(event))];
 
       if (paths.length === 0) {
-        alert("Drop one or more .jar files from your file manager.");
+        showAlert("Drop one or more .jar files from your file manager.");
         return;
       }
 
@@ -3781,7 +3932,10 @@ async function initEvents() {
 
         if (!state.account || !state.account.username) {
           setStatus("Please login with Microsoft first.");
-          alert("Please login with Microsoft first.");
+          showAlert("Please login with Microsoft first.", {
+            title: "Sign in first",
+            kind: "warning",
+          });
           return;
         }
 
@@ -3789,7 +3943,7 @@ async function initEvents() {
 
         if (!selectedProfile) {
           setStatus("Select an installation first.");
-          alert("Select an installation first.");
+          showAlert("Select an installation first.");
           return;
         }
 
@@ -3798,10 +3952,11 @@ async function initEvents() {
         const alreadyRunning = runningInstancesForProfile(selectedProfile.id).length;
 
         if (alreadyRunning > 0) {
-          const again = confirm(
+          const again = await showConfirm(
             `${selectedProfile.name} is already running (${alreadyRunning} instance${
               alreadyRunning > 1 ? "s" : ""
-            }).\n\nStart another instance?`
+            }).\n\nStart another instance?`,
+            { title: "Already running", confirmText: "Start another" }
           );
 
           if (!again) return;
@@ -3848,7 +4003,7 @@ async function initEvents() {
         hideLaunchProgress();
         setStatus(error.message || "Launch failed.");
         appendConsole(`[launcher error] ${error.message || error}`);
-        alert(error.message || "Launch failed.");
+        showError(error.message || "Launch failed.");
       }
     });
   }
@@ -3866,7 +4021,13 @@ async function initEvents() {
       const instance = consoleStore.instances.get(consoleStore.view);
 
       if (!instance) {
-        if (!confirm("Stop every running Minecraft instance?")) return;
+        const stopAll = await showConfirm("Stop every running Minecraft instance?", {
+          title: "Stop all instances",
+          confirmText: "Stop all",
+          danger: true,
+        });
+
+        if (!stopAll) return;
 
         await window.launcherAPI.launcher.kill();
         setStatus("Stop signal sent to all instances.");
@@ -4025,7 +4186,10 @@ async function initEvents() {
     appendConsole(`[launcher] ${label} closed with code ${data.code}.`);
 
     if (Number(data.code) !== 0 && wrongJavaCrashInstances.has(data.instanceId)) {
-      alert(`${label}: wrong Java version was used. Change it in Installations.`);
+      showAlert(`${label}: wrong Java version was used. Change it in Installations.`, {
+        title: "Wrong Java version",
+        kind: "warning",
+      });
       setStatus("Wrong Java version was used. Change it in Installations.");
     }
 
@@ -4330,7 +4494,8 @@ function moveMcSelectFocus(direction) {
   if (items.length === 0) return;
 
   const current = items.indexOf(document.activeElement);
-  const start = current === -1 ? items.findIndex((item) => item.classList.contains("selected")) : current;
+  const start =
+    current === -1 ? items.findIndex((item) => item.classList.contains("selected")) : current;
   const next = items[(start + direction + items.length) % items.length];
 
   next.focus();
@@ -4450,7 +4615,10 @@ function initMcSelects() {
         return;
       }
 
-      if (open.menu.contains(document.activeElement) || document.activeElement === open.entry.button) {
+      if (
+        open.menu.contains(document.activeElement) ||
+        document.activeElement === open.entry.button
+      ) {
         if (event.key === "ArrowDown" || event.key === "ArrowUp") {
           event.preventDefault();
           event.stopPropagation();
@@ -4727,8 +4895,7 @@ function unmountWidget(id) {
 
   try {
     mounted.cleanup?.();
-  } catch {
-  }
+  } catch {}
 
   mounted.element.remove();
   homeWidgets.mounted.delete(id);
@@ -4826,7 +4993,9 @@ function moveWidget(id, targetIndex) {
 }
 
 async function getServerStatus(ip) {
-  const address = String(ip || "").trim().toLowerCase();
+  const address = String(ip || "")
+    .trim()
+    .toLowerCase();
   if (!address) return null;
 
   const cached = homeWidgets.serverStatusCache.get(address);
@@ -4857,7 +5026,8 @@ function formatPlayerNumber(value) {
 }
 
 function widgetSkinSource() {
-  if (!state.account?.username || state.account.type === "offline") return { skin: DEFAULT_STEVE_SKIN, cape: "", slim: false };
+  if (!state.account?.username || state.account.type === "offline")
+    return { skin: DEFAULT_STEVE_SKIN, cape: "", slim: false };
 
   const skin = getCurrentSkinFromMinecraftProfile();
   const cape = getActiveCapeFromMinecraftProfile?.();
@@ -4875,8 +5045,7 @@ async function ensureSkinProfileForWidgets() {
 
   try {
     state.skins.minecraftProfile = await window.launcherAPI.skins.getMinecraftProfile();
-  } catch {
-  }
+  } catch {}
 }
 
 async function ensureLatestMinecraftVersions() {
@@ -5006,8 +5175,9 @@ const WIDGET_RENDERERS = {
 
     update(body, settings) {
       const key =
-        String(settings.player || "").trim().toLowerCase() ||
-        `account:${state.account?.uuid || state.account?.username || ""}`;
+        String(settings.player || "")
+          .trim()
+          .toLowerCase() || `account:${state.account?.uuid || state.account?.username || ""}`;
       const cached = homeWidgets.pvphqResults.get(key);
 
       this.draw(body, settings, cached || { loading: true });
@@ -5126,7 +5296,8 @@ const WIDGET_RENDERERS = {
       position.textContent =
         settings.showPosition && ladder.position ? `#${formatPlayerNumber(ladder.position)}` : "";
 
-      if (!ladder.placed) addStat("Placements", `${ladder.placementGames}/${ladder.placementTarget}`);
+      if (!ladder.placed)
+        addStat("Placements", `${ladder.placementGames}/${ladder.placementTarget}`);
       if (settings.showElo) addStat("Elo", formatPlayerNumber(ladder.rating));
       if (settings.showTr) addStat("TR", formatPlayerNumber(ladder.tr));
       if (settings.showPeak) addStat("Peak", formatPlayerNumber(ladder.peak));
@@ -5138,7 +5309,9 @@ const WIDGET_RENDERERS = {
         footer.push(
           `Global ${result.globalRank || ""}${
             result.globalPosition ? ` #${formatPlayerNumber(result.globalPosition)}` : ""
-          }`.replace(/\s+/g, " ").trim()
+          }`
+            .replace(/\s+/g, " ")
+            .trim()
         );
       }
 
@@ -5503,7 +5676,8 @@ function buildWidgetSettingsForm(id) {
 
     const apply = () => {
       if (input.type === "checkbox") settings[key] = input.checked;
-      else if (input.type === "range" || input.type === "number") settings[key] = Number(input.value);
+      else if (input.type === "range" || input.type === "number")
+        settings[key] = Number(input.value);
       else settings[key] = input.value.trim();
 
       saveHomeWidgetConfig();
@@ -5753,8 +5927,14 @@ function initHomeWidgets() {
 
   $("#homeCustomizeDoneBtn")?.addEventListener("click", closeCustomizePanel);
 
-  $("#homeWidgetsResetBtn")?.addEventListener("click", () => {
-    if (!confirm("Reset home widgets to the default layout?")) return;
+  $("#homeWidgetsResetBtn")?.addEventListener("click", async () => {
+    const reset = await showConfirm("Reset home widgets to the default layout?", {
+      title: "Reset widgets",
+      confirmText: "Reset",
+      danger: true,
+    });
+
+    if (!reset) return;
 
     for (const id of Array.from(homeWidgets.mounted.keys())) unmountWidget(id);
 
@@ -5780,11 +5960,13 @@ function initHomeWidgets() {
 
 let welcomeAnimationTimer = null;
 
-function playWelcomeAnimation(account) {
+function playWelcomeAnimation(account, options = {}) {
   const overlay = $("#welcomeOverlay");
   if (!overlay || !account?.username) return;
 
   $("#welcomeName").textContent = account.username;
+  $("#welcomeGreeting").textContent = options.returning ? "Welcome back" : "Welcome";
+  $("#welcomeKicker").textContent = options.returning ? "Good to see you again" : "Signed in";
 
   const welcomeHead = $("#welcomeHead");
   const sidebarHead = $("#playerHead");
@@ -5839,7 +6021,10 @@ function renderDeveloperInstances() {
     list.length === 0
       ? "None."
       : list
-          .map((instance) => `${instance.profileName} #${instance.number} (${instance.status}, pid ${instance.pid || "?"})`)
+          .map(
+            (instance) =>
+              `${instance.profileName} #${instance.number} (${instance.status}, pid ${instance.pid || "?"})`
+          )
           .join(" · ");
 }
 
@@ -5972,7 +6157,13 @@ function initDeveloperScreen() {
   });
 
   $("#devStopAllBtn")?.addEventListener("click", async () => {
-    if (!confirm("Stop every running Minecraft instance?")) return;
+    const stopAll = await showConfirm("Stop every running Minecraft instance?", {
+      title: "Stop all instances",
+      confirmText: "Stop all",
+      danger: true,
+    });
+
+    if (!stopAll) return;
     await window.launcherAPI.launcher.kill();
   });
 }
@@ -6093,8 +6284,7 @@ function renderOnboardingStep() {
   const dots = $("#onboardingDots");
   if (dots) {
     dots.innerHTML = ONBOARDING_STEPS.map((_, index) => {
-      const cls =
-        index === onboarding.index ? "current" : index < onboarding.index ? "done" : "";
+      const cls = index === onboarding.index ? "current" : index < onboarding.index ? "done" : "";
       return `<span class="onboarding-dot ${cls}"></span>`;
     }).join("");
   }
@@ -6105,7 +6295,8 @@ function renderOnboardingStep() {
   const next = $("#onboardingNextBtn");
   if (next) {
     if (step === "welcome") next.textContent = "Get started";
-    else if (step === "account") next.textContent = state.account?.username ? "Next" : "Skip for now";
+    else if (step === "account")
+      next.textContent = state.account?.username ? "Next" : "Skip for now";
     else if (step === "done") next.textContent = "Finish";
     else next.textContent = "Next";
   }
@@ -6160,7 +6351,7 @@ async function onboardingNext() {
   try {
     await applyOnboardingStep(step);
   } catch (error) {
-    alert(error.message || "Could not save this step.");
+    showError(error.message || "Could not save this step.");
     return;
   }
 
@@ -6204,7 +6395,7 @@ async function initUpdateSettings() {
         appendConsole(`[settings] ${label} auto-update ${input.checked ? "enabled" : "disabled"}.`);
       } catch (error) {
         input.checked = !input.checked;
-        alert(friendlyErrorMessage(error, "Could not save the setting."));
+        showError(friendlyErrorMessage(error, "Could not save the setting."));
       }
     });
   };
@@ -6270,11 +6461,31 @@ function initDataFolderSetting() {
     try {
       await window.launcherAPI.folders.openPath(dir);
     } catch (error) {
-      alert(friendlyErrorMessage(error, "Could not open the data folder."));
+      showError(friendlyErrorMessage(error, "Could not open the data folder."));
     }
   });
 
   renderDataFolderSetting();
+}
+
+function playWelcomeBackWhenReady(account) {
+  const head = $("#playerHead");
+  let played = false;
+
+  const play = () => {
+    if (played) return;
+    played = true;
+    playWelcomeAnimation(account, { returning: true });
+  };
+
+  if (!head || (head.complete && head.naturalWidth > 0)) {
+    play();
+    return;
+  }
+
+  head.addEventListener("load", play, { once: true });
+  head.addEventListener("error", play, { once: true });
+  setTimeout(play, 1200);
 }
 
 function initOnboardingEvents() {
@@ -6419,7 +6630,7 @@ async function ensureJavaBeforeLaunch(profile) {
   if (check?.ok) return true;
 
   if (check?.reason === "custom-missing") {
-    alert(check.message);
+    showError(check.message);
     return false;
   }
 
@@ -6459,6 +6670,8 @@ async function boot() {
 
   if (!isOnboardingComplete()) {
     openOnboarding();
+  } else if (state.account?.username) {
+    playWelcomeBackWhenReady(state.account);
   }
 
   await loadDiscordStatus();
@@ -6481,5 +6694,5 @@ async function boot() {
 boot().catch((error) => {
   console.error(error);
   setStatus(error.message || "Launcher failed to start.");
-  alert(error.message || "Launcher failed to start.");
+  showError(error.message || "Launcher failed to start.");
 });

@@ -307,7 +307,9 @@ function getMinecraftAccessToken() {
   const account = storage.readJson(ACCOUNT_FILE, null);
 
   if (account?.type === "offline") {
-    throw new Error("Offline accounts can't use skins or capes. Please login with Microsoft first.");
+    throw new Error(
+      "Offline accounts can't use skins or capes. Please login with Microsoft first."
+    );
   }
 
   const token = account?.access_token || account?.accessToken || "";

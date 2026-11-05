@@ -1021,7 +1021,8 @@ app.whenReady().then(async () => {
       const renaming = requestedName !== current.name;
       const movingDir =
         Boolean(requestedDir) &&
-        path.resolve(requestedDir).toLowerCase() !== path.resolve(current.gameDir || "").toLowerCase();
+        path.resolve(requestedDir).toLowerCase() !==
+          path.resolve(current.gameDir || "").toLowerCase();
 
       if (renaming || movingDir) {
         throw new Error("Stop this installation before renaming it or changing its game folder.");

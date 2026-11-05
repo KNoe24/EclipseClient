@@ -34,8 +34,14 @@ function pendingUpdatePaths() {
 }
 
 function compareVersions(a, b) {
-  const pa = String(a || "0").split("-")[0].split(".").map((part) => Number(part) || 0);
-  const pb = String(b || "0").split("-")[0].split(".").map((part) => Number(part) || 0);
+  const pa = String(a || "0")
+    .split("-")[0]
+    .split(".")
+    .map((part) => Number(part) || 0);
+  const pb = String(b || "0")
+    .split("-")[0]
+    .split(".")
+    .map((part) => Number(part) || 0);
 
   for (let index = 0; index < Math.max(pa.length, pb.length); index += 1) {
     const diff = (pa[index] || 0) - (pb[index] || 0);

@@ -102,6 +102,18 @@ The portable launcher reads `latest-portable.json`, downloads the new exe next t
 
 A portable folder made with `portable.txt` (not the portable `.exe`) can't replace itself; update it by copying in the new launcher files.
 
+### Releasing with one command
+
+```
+npm run release
+```
+
+This builds the installer and the portable exe, checks that `version` in `package.json` is higher than the one on the `launcher` branch, copies `latest.yml`, `latest-portable.json`, the installer (+ `.blockmap`) and the portable exe into its own copy of `eclipse-updates` (`launcher/release/eclipse-updates`, ignored by git), removes the previous version's exes, commits "Launcher <version>" and pushes to the `launcher` branch.
+
+- `npm run release:dry` does everything except the push.
+- `node scripts/release.js --skip-build` publishes what is already in `dist/`.
+- The updates repo and branch are set under `"release"` in `package.json`.
+
 ## 4. Turning Auto-update Off
 
 Settings → Updates has two separate switches:
