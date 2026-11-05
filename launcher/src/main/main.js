@@ -16,6 +16,10 @@ const discordService = require("./services/discord");
 const javaService = require("./services/java");
 const storage = require("./services/storage");
 
+if (storage.isPortable()) {
+  app.setPath("userData", path.join(storage.getRootDir(), "electron"));
+}
+
 if (process.platform === "win32") {
   app.setAppUserModelId("cc.wawe.eclipse-launcher");
 }
@@ -119,7 +123,7 @@ function readSkinsFile() {
       id: skin.id || skinId(),
       name: String(skin.name || "Skin"),
       model: normalizeSkinModel(skin.model),
-      skinPath: String(skin.skinPath || ""),
+      skinPath: storage.fromStoredPath(String(skin.skinPath || "")),
       sourceUrl: String(skin.sourceUrl || ""),
       capeId: normalizeCapeId(skin.capeId),
       createdAt: skin.createdAt || new Date().toISOString(),
@@ -134,7 +138,15 @@ function writeSkinsFile(data) {
     skins: Array.isArray(data?.skins) ? data.skins : [],
   };
 
-  return storage.writeJson(SKINS_FILE, normalized);
+  storage.writeJson(SKINS_FILE, {
+    ...normalized,
+    skins: normalized.skins.map((skin) => ({
+      ...skin,
+      skinPath: storage.toStoredPath(skin.skinPath),
+    })),
+  });
+
+  return normalized;
 }
 
 function skinDataUrlFor(skinPath) {
@@ -810,6 +822,25 @@ async function checkDefaultClientOnStartup() {
   }
 }
 
+async function updateDiscordForInstances(instances = []) {
+  const running = instances.filter((instance) => instance.status === "running");
+
+  try {
+    if (running.length > 0) {
+      const latest = running.reduce((a, b) => (b.startedAt > a.startedAt ? b : a));
+      const extra = running.length > 1 ? ` (+${running.length - 1} more)` : "";
+
+      await discordService.setPlayingActivity(`${latest.profileName}${extra}`, latest.versionId);
+      return;
+    }
+
+    const selected = await profileService.getSelectedProfile();
+    await discordService.setLauncherActivity(selected?.name || "Launcher");
+  } catch (error) {
+    console.warn("[discord] Failed to update activity:", error.message || error);
+  }
+}
+
 function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1300,
@@ -860,6 +891,8 @@ app.whenReady().then(async () => {
 
   createWindow();
 
+  launcherService.onInstancesChanged(updateDiscordForInstances);
+
   ipcMain.handle("system:getMemoryInfo", async () => {
     const totalBytes = os.totalmem();
     const totalGb = Math.max(1, Math.floor(totalBytes / 1024 / 1024 / 1024));
@@ -870,8 +903,26 @@ app.whenReady().then(async () => {
     };
   });
 
+  ipcMain.handle("system:getAppInfo", async () => {
+    return {
+      version: app.getVersion(),
+      packaged: app.isPackaged,
+      platform: process.platform,
+      portable: storage.isPortable(),
+      dataDir: storage.getRootDir(),
+    };
+  });
+
   ipcMain.handle("auth:login", async () => {
     return authService.loginMicrosoft();
+  });
+
+  ipcMain.handle("auth:loginOffline", async (_event, username) => {
+    return authService.loginOffline(username);
+  });
+
+  ipcMain.handle("auth:getOfflineEligibility", async () => {
+    return authService.getOfflineEligibility();
   });
 
   ipcMain.handle("auth:getAccount", async () => {
@@ -931,6 +982,22 @@ app.whenReady().then(async () => {
   });
 
   ipcMain.handle("profiles:update", async (_event, id, patch) => {
+    if (launcherService.isRunning(id) && patch) {
+      const current = await profileService.getProfileById(id);
+      const requestedName = "name" in patch ? String(patch.name || "").trim() : current.name;
+      const requestedDir = "gameDir" in patch ? String(patch.gameDir || "").trim() : "";
+
+      const renaming = requestedName !== current.name;
+      const movingDir =
+        Boolean(requestedDir) &&
+        path.resolve(requestedDir).toLowerCase() !==
+          path.resolve(current.gameDir || "").toLowerCase();
+
+      if (renaming || movingDir) {
+        throw new Error("Stop this installation before renaming it or changing its game folder.");
+      }
+    }
+
     const updated = await profileService.updateProfile(id, patch);
 
     const selected = await profileService.getSelectedProfile();
@@ -953,6 +1020,10 @@ app.whenReady().then(async () => {
 
     if (!profileToDelete) {
       throw new Error("Installation not found.");
+    }
+
+    if (launcherService.isRunning(id)) {
+      throw new Error("Stop this installation before deleting it.");
     }
 
     const gameDir = profileToDelete.gameDir || "";
@@ -1168,30 +1239,19 @@ app.whenReady().then(async () => {
   });
 
   ipcMain.handle("launcher:launch", async (_event, profileId) => {
-    const result = await launcherService.launch(profileId, mainWindow);
-
-    if (result && result.ok) {
-      await discordService.setPlayingActivity(result.profileName, result.versionId);
-    }
-
-    return result;
+    return launcherService.launch(profileId, mainWindow);
   });
 
-  ipcMain.handle("launcher:isRunning", async () => {
-    return launcherService.isRunning();
+  ipcMain.handle("launcher:isRunning", async (_event, profileId = null) => {
+    return launcherService.isRunning(profileId);
   });
 
-  ipcMain.handle("launcher:kill", async () => {
-    const result = await launcherService.kill();
+  ipcMain.handle("launcher:listInstances", async () => {
+    return launcherService.listInstances();
+  });
 
-    try {
-      const selected = await profileService.getSelectedProfile();
-      await discordService.setLauncherActivity(selected?.name || "Launcher");
-    } catch {
-      await discordService.setLauncherActivity("Launcher");
-    }
-
-    return result;
+  ipcMain.handle("launcher:kill", async (_event, instanceId = null) => {
+    return launcherService.kill(instanceId);
   });
 
   ipcMain.handle("updater:check", async () => {

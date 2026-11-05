@@ -9,7 +9,7 @@ let detectedTotalMemoryGb = DEFAULT_MEMORY_TOTAL_GB;
 let launchProgressTimer = null;
 let clientUpdateProgressValue = 0;
 let playerHeadRefreshToken = Date.now();
-let wrongJavaVersionCrashDetected = false;
+const wrongJavaCrashInstances = new Set();
 
 let skinEditorViewer = null;
 let currentSkinViewer = null;
@@ -40,8 +40,19 @@ const DEFAULT_INSTALLATION_ICONS = [
   { id: "furnace", label: "Furnace" },
 ];
 
-let consoleLines = [];
-let pendingConsoleLines = [];
+const CONSOLE_VIEW_ALL = "all";
+const CONSOLE_VIEW_LAUNCHER = "launcher";
+
+const consoleStore = {
+  view: CONSOLE_VIEW_ALL,
+  buffers: new Map([
+    [CONSOLE_VIEW_ALL, []],
+    [CONSOLE_VIEW_LAUNCHER, []],
+  ]),
+  instances: new Map(),
+  dirty: new Set(),
+};
+
 let consoleRenderScheduled = false;
 
 const state = {
@@ -53,6 +64,9 @@ const state = {
   installedVersions: [],
   minecraftVersions: [],
   javaInstallations: [],
+  runningInstances: [],
+  launcherUpdate: null,
+  clientUpdateInfo: null,
   installationBackdropMouseDownOnBackdrop: false,
   installationEditor: {
     profileId: null,
@@ -179,7 +193,7 @@ function setPlayerHead(account, forceRefresh = false) {
     playerHeadRefreshToken = Date.now();
   }
 
-  if (account && account.uuid) {
+  if (account && account.uuid && account.type !== "offline") {
     const uuid = encodeURIComponent(String(account.uuid));
 
     head.src =
@@ -207,23 +221,47 @@ function refreshLoginCardHeadAfterSkinChange() {
     setPlayerHead(state.account, true);
   }, 8000);
 }
+function pushConsoleLine(bufferKey, line) {
+  let buffer = consoleStore.buffers.get(bufferKey);
+
+  if (!buffer) {
+    buffer = [];
+    consoleStore.buffers.set(bufferKey, buffer);
+  }
+
+  buffer.push(line);
+
+  if (buffer.length > MAX_CONSOLE_LINES + 200) {
+    buffer.splice(0, buffer.length - MAX_CONSOLE_LINES);
+  }
+
+  consoleStore.dirty.add(bufferKey);
+}
+
 function renderConsole() {
   consoleRenderScheduled = false;
 
-  if (pendingConsoleLines.length > 0) {
-    consoleLines.push(...pendingConsoleLines);
-    pendingConsoleLines = [];
+  const view = consoleStore.view;
+  const forceScroll = consoleStore.dirty.has("__scroll");
+  const needsRender = consoleStore.dirty.has(view) || consoleStore.dirty.has("__force");
 
-    if (consoleLines.length > MAX_CONSOLE_LINES) {
-      consoleLines = consoleLines.slice(consoleLines.length - MAX_CONSOLE_LINES);
-    }
-  }
+  consoleStore.dirty.clear();
+
+  if (!needsRender) return;
 
   const output = $("#consoleOutput");
   if (!output) return;
 
-  output.textContent = consoleLines.join("\n") + (consoleLines.length > 0 ? "\n" : "");
-  output.scrollTop = output.scrollHeight;
+  const lines = consoleStore.buffers.get(view) || [];
+  const visible = lines.length > MAX_CONSOLE_LINES ? lines.slice(-MAX_CONSOLE_LINES) : lines;
+
+  const stickToBottom = output.scrollHeight - output.scrollTop - output.clientHeight < 40;
+
+  output.textContent = visible.join("\n") + (visible.length > 0 ? "\n" : "");
+
+  if (stickToBottom || forceScroll) {
+    output.scrollTop = output.scrollHeight;
+  }
 }
 
 function scheduleConsoleRender() {
@@ -237,23 +275,167 @@ function scheduleConsoleRender() {
 }
 
 function appendConsole(line) {
-  pendingConsoleLines.push(String(line ?? ""));
+  const text = String(line ?? "");
 
-  if (pendingConsoleLines.length > 200) {
-    renderConsole();
-    return;
-  }
+  pushConsoleLine(CONSOLE_VIEW_LAUNCHER, text);
+  pushConsoleLine(CONSOLE_VIEW_ALL, text);
 
   scheduleConsoleRender();
+  scheduleConsoleWidgetRefresh();
+}
+
+function instanceLabel(instance) {
+  if (!instance) return "Instance";
+  return `${instance.profileName || "Minecraft"} #${instance.number || "?"}`;
+}
+
+function appendInstanceConsole(instanceId, line) {
+  const text = String(line ?? "");
+  const instance = consoleStore.instances.get(instanceId);
+
+  pushConsoleLine(instanceId, text);
+  pushConsoleLine(CONSOLE_VIEW_ALL, `[${instanceLabel(instance)}] ${text}`);
+
+  scheduleConsoleRender();
+  scheduleConsoleWidgetRefresh();
+}
+
+function instanceStatusText(instance) {
+  if (instance.status === "running") return "running";
+  if (instance.status === "preparing") return "starting";
+  if (instance.exitCode === 0) return "closed";
+  if (instance.exitCode === undefined || instance.exitCode === null) return "closed";
+  return `crashed (${instance.exitCode})`;
+}
+
+function renderConsoleInstanceSelect() {
+  const select = $("#consoleInstanceSelect");
+  if (!select) return;
+
+  const options = [
+    { value: CONSOLE_VIEW_ALL, label: "All logs" },
+    { value: CONSOLE_VIEW_LAUNCHER, label: "Launcher" },
+  ];
+
+  const sortedInstances = Array.from(consoleStore.instances.values()).sort(
+    (a, b) => (b.startedAt || 0) - (a.startedAt || 0)
+  );
+
+  for (const instance of sortedInstances) {
+    options.push({
+      value: instance.instanceId,
+      label: `${instanceLabel(instance)} \u2014 ${instanceStatusText(instance)}`,
+    });
+  }
+
+  if (!options.some((option) => option.value === consoleStore.view)) {
+    consoleStore.view = CONSOLE_VIEW_ALL;
+  }
+
+  select.innerHTML = options
+    .map(
+      (option) =>
+        `<option value="${escapeHtml(option.value)}"${
+          option.value === consoleStore.view ? " selected" : ""
+        }>${escapeHtml(option.label)}</option>`
+    )
+    .join("");
+
+  renderConsoleStopButton();
+}
+
+function renderConsoleStopButton() {
+  const button = $("#consoleStopInstanceBtn");
+  if (!button) return;
+
+  const instance = consoleStore.instances.get(consoleStore.view);
+  const canStop = instance && (instance.status === "running" || instance.status === "preparing");
+  const anyRunning = Array.from(consoleStore.instances.values()).some(
+    (item) => item.status === "running" || item.status === "preparing"
+  );
+
+  if (instance) {
+    button.textContent = "Stop";
+    button.disabled = !canStop;
+    button.classList.toggle("hidden", false);
+  } else {
+    button.textContent = "Stop all";
+    button.disabled = !anyRunning;
+    button.classList.toggle("hidden", !anyRunning);
+  }
+}
+
+function setConsoleView(view) {
+  consoleStore.view = consoleStore.buffers.has(view) ? view : CONSOLE_VIEW_ALL;
+
+  const select = $("#consoleInstanceSelect");
+  if (select && select.value !== consoleStore.view) {
+    renderConsoleInstanceSelect();
+  }
+
+  renderConsoleStopButton();
+
+  consoleStore.dirty.add("__force");
+  consoleStore.dirty.add("__scroll");
+  renderConsole();
+}
+
+function syncConsoleInstances(list = []) {
+  const liveIds = new Set();
+
+  for (const info of list) {
+    liveIds.add(info.instanceId);
+
+    const existing = consoleStore.instances.get(info.instanceId) || {};
+    consoleStore.instances.set(info.instanceId, { ...existing, ...info });
+
+    if (!consoleStore.buffers.has(info.instanceId)) {
+      consoleStore.buffers.set(info.instanceId, []);
+    }
+  }
+
+  for (const instance of consoleStore.instances.values()) {
+    if (!liveIds.has(instance.instanceId) && instance.status !== "exited") {
+      instance.status = "exited";
+    }
+  }
+
+  state.runningInstances = list;
+
+  renderConsoleInstanceSelect();
+  renderProfilesList();
+  refreshWidget("quickstart");
+  renderDeveloperInstances();
+}
+
+function runningInstancesForProfile(profileId) {
+  return (state.runningInstances || []).filter((instance) => instance.profileId === profileId);
 }
 
 function refreshConsole() {
+  consoleStore.dirty.add("__force");
   renderConsole();
 }
 
 function clearConsole() {
-  consoleLines = [];
-  pendingConsoleLines = [];
+  const view = consoleStore.view;
+
+  if (view === CONSOLE_VIEW_ALL) {
+    for (const key of consoleStore.buffers.keys()) {
+      consoleStore.buffers.set(key, []);
+    }
+
+    for (const [id, instance] of consoleStore.instances) {
+      if (instance.status === "exited") {
+        consoleStore.instances.delete(id);
+        consoleStore.buffers.delete(id);
+      }
+    }
+
+    renderConsoleInstanceSelect();
+  } else {
+    consoleStore.buffers.set(view, []);
+  }
 
   const output = $("#consoleOutput");
   if (output) output.textContent = "";
@@ -286,6 +468,10 @@ function showHomeTab(name) {
 
   closeProfileDropup();
 
+  if (name !== "home" && homeWidgets.editing) {
+    closeCustomizePanel();
+  }
+
   if (name === "skin") {
     loadSkinPageData();
   }
@@ -312,6 +498,10 @@ function showPage(name) {
   });
 
   closeProfileDropup();
+
+  if (name !== "home" && homeWidgets.editing) {
+    closeCustomizePanel();
+  }
 
   if (name === "console") {
     refreshConsole();
@@ -363,6 +553,20 @@ function safeIconId(value) {
   const found = DEFAULT_INSTALLATION_ICONS.find((icon) => icon.id === value);
   return found ? found.id : "grass";
 }
+
+document.addEventListener(
+  "error",
+  (event) => {
+    const img = event.target;
+
+    if (!(img instanceof HTMLImageElement) || img.dataset.iconFallback === "done") return;
+    if (!img.closest(".installation-icon-cube, .editor-icon-preview")) return;
+
+    img.dataset.iconFallback = "done";
+    img.src = `${INSTALLATION_ICON_BASE_PATH}grass.png`;
+  },
+  true
+);
 
 function renderInstallationIconHtml(profile, extraClass = "") {
   if (profile?.icon === "custom" && profile.customIconDataUrl) {
@@ -424,7 +628,7 @@ function renderAccountBox(account) {
     accountName.textContent = account.username;
 
     if (accountSubtext) {
-      accountSubtext.textContent = "Logged in";
+      accountSubtext.textContent = account.type === "offline" ? "Offline account" : "Logged in";
     }
 
     loginBtn.classList.add("hidden");
@@ -548,6 +752,8 @@ async function loadProfiles() {
   renderSelectedProfileDetails();
   renderProfilesList();
   fillSettingsForm();
+
+  if (homeWidgets.config) refreshWidget("quickstart");
 }
 
 function openProfileDropup() {
@@ -648,6 +854,20 @@ function renderSelectedProfileDetails() {
   `;
 }
 
+const LOADER_LABELS = {
+  vanilla: "Vanilla",
+  fabric: "Fabric",
+  quilt: "Quilt",
+  forge: "Forge",
+  neoforge: "NeoForge",
+  custom: "Custom",
+};
+
+function loaderLabel(loaderType) {
+  const key = String(loaderType || "vanilla").toLowerCase();
+  return LOADER_LABELS[key] || key.charAt(0).toUpperCase() + key.slice(1);
+}
+
 function renderProfilesList() {
   const root = $("#installations-list");
   if (!root || !state.profilesData) return;
@@ -656,32 +876,69 @@ function renderProfilesList() {
 
   for (const profile of state.profilesData.profiles) {
     const selected = profile.id === selectedProfileId();
+    const runningCount = runningInstancesForProfile(profile.id).length;
+    const running = runningCount > 0;
 
     const card = document.createElement("div");
     card.className = "installations-cubed mcsection";
+    card.tabIndex = 0;
+    card.title = profile.name;
 
-    if (selected) {
-      card.classList.add("selected");
-    }
+    card.classList.toggle("selected", selected);
+    card.classList.toggle("running", running);
+
+    const versionId = profile.customVersionId || profile.minecraftVersion || "";
+    const showVersionId = versionId && versionId !== profile.minecraftVersion;
 
     card.innerHTML = `
       ${renderInstallationIconHtml(profile)}
 
       <div class="installation-info">
         <span class="whitetext mct installation-name">${escapeHtml(profile.name)}</span>
-        <span class="whitetext mcr installation-version">
-          ${escapeHtml(profile.loaderType)}
-          · ${escapeHtml(profile.customVersionId || profile.minecraftVersion)}
+        <span class="mcr installation-version">
+          ${escapeHtml(loaderLabel(profile.loaderType))} · ${escapeHtml(profile.minecraftVersion || "?")}
         </span>
-        ${selected ? `<span class="installation-selected-badge mcr">Selected</span>` : ""}
+        <span class="mcr installation-version-id${showVersionId ? "" : " is-empty"}">${showVersionId ? escapeHtml(versionId) : "&nbsp;"}</span>
+      </div>
+
+      <div class="installation-badges">
+        ${selected ? `<span class="installation-badge selected mcr">Selected</span>` : ""}
+        ${
+          running
+            ? `<span class="installation-badge running mcr">Running${runningCount > 1 ? ` ×${runningCount}` : ""}</span>`
+            : ""
+        }
       </div>
 
       <div class="installation-hover-panel">
-        <button class="mcbtn installation-action-btn green" data-action="select" type="button">Select</button>
+        <button class="mcbtn installation-action-btn green" data-action="select" type="button"${
+          selected ? " disabled" : ""
+        }>${selected ? "Selected" : "Select"}</button>
         <button class="mcbtn installation-action-btn" data-action="edit" type="button">Edit</button>
-        <button class="mcbtn installation-action-btn danger" data-action="delete" type="button">Delete</button>
+        ${
+          running
+            ? `<button class="mcbtn installation-action-btn danger" data-action="stop" type="button">Stop</button>`
+            : `<button class="mcbtn installation-action-btn danger" data-action="delete" type="button">Delete</button>`
+        }
       </div>
     `;
+
+    card.querySelector('[data-action="stop"]')?.addEventListener("click", async (event) => {
+      event.stopPropagation();
+
+      for (const instance of runningInstancesForProfile(profile.id)) {
+        await window.launcherAPI.launcher.kill(instance.instanceId);
+      }
+
+      setStatus(`Stop signal sent to ${profile.name}.`);
+    });
+
+    card.addEventListener("keydown", (event) => {
+      if (event.target === card && (event.key === "Enter" || event.key === " ")) {
+        event.preventDefault();
+        openInstallationEditor(profile.id);
+      }
+    });
 
     card.querySelector('[data-action="select"]').addEventListener("click", async (event) => {
       event.stopPropagation();
@@ -693,7 +950,7 @@ function renderProfilesList() {
       openInstallationEditor(profile.id);
     });
 
-    card.querySelector('[data-action="delete"]').addEventListener("click", async (event) => {
+    card.querySelector('[data-action="delete"]')?.addEventListener("click", async (event) => {
       event.stopPropagation();
 
       const profiles = state.profilesData?.profiles || [];
@@ -2406,6 +2663,12 @@ async function loadSkinPageData(force = false) {
   }
 
   const root = $("#home-tab-skin");
+
+  if (!state.account?.username || state.account.type === "offline") {
+    renderSkinLoginRequired(root);
+    return;
+  }
+
   if (root) {
     root.innerHTML = `<div class="skin-loading whitetext mcr">Loading skins...</div>`;
   }
@@ -2421,15 +2684,47 @@ async function loadSkinPageData(force = false) {
     state.skins.loaded = true;
 
     renderSkinPage();
+
+    if (force) remountWidget("skin");
   } catch (error) {
+    const message = friendlyErrorMessage(error, "Failed to load skins.");
+
+    if (/not logged in|login with microsoft/i.test(message)) {
+      renderSkinLoginRequired(root);
+      return;
+    }
+
     if (root) {
       root.innerHTML = `
         <div class="skin-loading whitetext mcr">
-          ${escapeHtml(error.message || "Failed to load skins. Login first.")}
+          ${escapeHtml(message)}
         </div>
       `;
     }
   }
+}
+
+function friendlyErrorMessage(error, fallback = "Something went wrong.") {
+  const raw = String(error?.message || error || "").trim();
+  const cleaned = raw.replace(/^Error invoking remote method '[^']*':\s*(?:\w*Error:\s*)?/i, "");
+  return cleaned || fallback;
+}
+
+function renderSkinLoginRequired(root) {
+  const template = $("#skinLoginRequiredTemplate");
+  if (!root || !template) return;
+
+  root.innerHTML = "";
+  root.appendChild(template.content.cloneNode(true));
+
+  root.querySelector('[data-action="skin-login"]')?.addEventListener("click", async () => {
+    const account = await handleLogin();
+
+    if (account?.username) {
+      state.skins.loaded = false;
+      await loadSkinPageData(true);
+    }
+  });
 }
 
 async function addCurrentSkinToLibrary() {
@@ -2772,49 +3067,9 @@ function getDroppedJarPaths(event) {
     .filter(Boolean);
 }
 
-async function loadSingleServerStatus(element) {
-  const prefix = "server:";
-  const address = element.id.slice(prefix.length).trim();
-
-  if (!address) {
-    element.textContent = "Offline";
-    element.classList.add("offline");
-    return;
-  }
-
-  element.textContent = "Loading...";
-  element.classList.remove("offline");
-
-  try {
-    const response = await fetch(`https://api.mcsrvstat.us/3/${encodeURIComponent(address)}`);
-
-    if (!response.ok) {
-      throw new Error(`Server status API returned ${response.status}`);
-    }
-
-    const data = await response.json();
-
-    if (!data.online) {
-      element.textContent = "Offline";
-      element.classList.add("offline");
-      return;
-    }
-
-    const onlinePlayers = data.players?.online ?? 0;
-    const maxPlayers = data.players?.max ?? 0;
-
-    element.textContent = `${onlinePlayers}/${maxPlayers}`;
-    element.classList.remove("offline");
-  } catch {
-    element.textContent = "Offline";
-    element.classList.add("offline");
-  }
-}
-
 async function loadServerStatuses() {
-  const serverElements = $$('[id^="server:"]');
-
-  await Promise.all(serverElements.map((element) => loadSingleServerStatus(element)));
+  homeWidgets.serverStatusCache.clear();
+  refreshDataWidgets();
 }
 
 async function syncDefaultClient(mode, force = true) {
@@ -2854,33 +3109,8 @@ async function checkDefaultClientInfoManually() {
   try {
     const info = await window.launcherAPI.clientUpdater.getDefaultInfo();
 
-    if (!info.updateAvailable) {
-      setUpdateStatus(
-        `Default client is up to date. Version: ${info.remoteClientVersion || "unknown"}`
-      );
-      setStatus("Default client is already up to date.");
-      return;
-    }
-
-    setUpdateStatus(
-      `Default client update available: ${info.localClientVersion || "none"} → ${info.remoteClientVersion || "new"}. ` +
-        `Server mode: ${info.updateMode || "keep"}.`
-    );
-
-    setStatus("Default client update available.");
-
-    if (info.updateMode === "ask") {
-      showUpdateModePrompt(info);
-    }
-  } catch (error) {
-    setUpdateStatus(`Default client check failed: ${error.message || error}`);
-    setStatus("Default client check failed.");
-    appendConsole(`[client updater] Check failed: ${error.message || error}`);
-  }
-}
-async function checkDefaultClientInfoManually() {
-  try {
-    const info = await window.launcherAPI.clientUpdater.getDefaultInfo();
+    state.clientUpdateInfo = info;
+    refreshWidget("launcherupdate");
 
     if (!info.updateAvailable) {
       setUpdateStatus(
@@ -2907,7 +3137,6 @@ async function checkDefaultClientInfoManually() {
     appendConsole(`[client updater] Check failed: ${error.message || error}`);
   }
 }
-
 function showUpdateModePrompt(info) {
   const backdrop = document.createElement("div");
   backdrop.className = "update-mode-backdrop";
@@ -2990,6 +3219,12 @@ async function handleLogin() {
 
     setStatus(`Logged in as ${refreshedAccount.username}.`);
     appendConsole(`[auth] Logged in as ${refreshedAccount.username}.`);
+
+    state.skins.minecraftProfile = null;
+    remountWidget("skin");
+    playWelcomeAnimation(refreshedAccount);
+
+    return refreshedAccount;
   } catch (error) {
     const message = error.message || String(error);
     setStatus(message);
@@ -3481,6 +3716,15 @@ async function initEvents() {
     logoutBtn.addEventListener("click", async () => {
       await window.launcherAPI.auth.logout();
       await loadAccount();
+
+      state.skins.loaded = false;
+      state.skins.minecraftProfile = null;
+      remountWidget("skin");
+
+      if ($("#home-tab-skin")?.classList.contains("active")) {
+        renderSkinLoginRequired($("#home-tab-skin"));
+      }
+
       setStatus("Logged out.");
       appendConsole("[auth] Logged out.");
     });
@@ -3515,6 +3759,18 @@ async function initEvents() {
 
         const launcherSettings = getLauncherSettings();
 
+        const alreadyRunning = runningInstancesForProfile(selectedProfile.id).length;
+
+        if (alreadyRunning > 0) {
+          const again = confirm(
+            `${selectedProfile.name} is already running (${alreadyRunning} instance${
+              alreadyRunning > 1 ? "s" : ""
+            }).\n\nStart another instance?`
+          );
+
+          if (!again) return;
+        }
+
         flyRocket();
         startFakeLaunchProgress();
 
@@ -3526,13 +3782,19 @@ async function initEvents() {
             showPage("console");
           }, 650);
         }
-        wrongJavaVersionCrashDetected = false;
+
         const result = await window.launcherAPI.launcher.launch(selectedProfile.id);
 
         finishLaunchProgress();
 
-        setStatus(`Launched ${result.profileName}.`);
-        appendConsole(`[launcher] Started version ${result.versionId}.`);
+        setStatus(`Launched ${result.profileName} #${result.instanceNumber}.`);
+        appendConsole(
+          `[launcher] Started ${result.profileName} #${result.instanceNumber} (version ${result.versionId}).`
+        );
+
+        if (launcherSettings.openConsoleOnLaunch) {
+          setConsoleView(result.instanceId);
+        }
 
         if (!launcherSettings.keepLauncherOpenOnLaunch) {
           setTimeout(() => {
@@ -3548,11 +3810,28 @@ async function initEvents() {
     });
   }
 
-  const killBtn = $("#killBtn");
-  if (killBtn) {
-    killBtn.addEventListener("click", async () => {
-      await window.launcherAPI.launcher.kill();
-      setStatus("Stop signal sent.");
+  const consoleInstanceSelect = $("#consoleInstanceSelect");
+  if (consoleInstanceSelect) {
+    consoleInstanceSelect.addEventListener("change", () => {
+      setConsoleView(consoleInstanceSelect.value);
+    });
+  }
+
+  const consoleStopInstanceBtn = $("#consoleStopInstanceBtn");
+  if (consoleStopInstanceBtn) {
+    consoleStopInstanceBtn.addEventListener("click", async () => {
+      const instance = consoleStore.instances.get(consoleStore.view);
+
+      if (!instance) {
+        if (!confirm("Stop every running Minecraft instance?")) return;
+
+        await window.launcherAPI.launcher.kill();
+        setStatus("Stop signal sent to all instances.");
+        return;
+      }
+
+      await window.launcherAPI.launcher.kill(instance.instanceId);
+      setStatus(`Stop signal sent to ${instanceLabel(instance)}.`);
     });
   }
 
@@ -3672,27 +3951,53 @@ async function initEvents() {
 
   window.launcherAPI.events.onGameLog((line) => {
     appendConsole(line);
+  });
+
+  window.launcherAPI.events.onInstanceLog(({ instanceId, line }) => {
+    if (!consoleStore.instances.has(instanceId)) {
+      consoleStore.instances.set(instanceId, { instanceId, status: "preparing" });
+    }
+
+    appendInstanceConsole(instanceId, line);
 
     if (isWrongJavaVersionCrashLine(line)) {
-      wrongJavaVersionCrashDetected = true;
+      wrongJavaCrashInstances.add(instanceId);
     }
   });
 
+  window.launcherAPI.events.onInstancesChanged((list) => {
+    syncConsoleInstances(list);
+  });
+
   window.launcherAPI.events.onGameClose((data) => {
-    setStatus(`Minecraft closed with code ${data.code}.`);
-    appendConsole(`[launcher] Minecraft closed with code ${data.code}.`);
+    const instance = consoleStore.instances.get(data.instanceId);
+    const label = instance ? instanceLabel(instance) : data.profileName || "Minecraft";
 
-    if (Number(data.code) !== 0 && wrongJavaVersionCrashDetected) {
-      wrongJavaVersionCrashDetected = false;
+    if (instance) {
+      instance.status = "exited";
+      instance.exitCode = data.code;
+    }
 
-      alert("Wrong Java version was used. Change it in Installations.");
+    setStatus(`${label} closed with code ${data.code}.`);
+    appendConsole(`[launcher] ${label} closed with code ${data.code}.`);
+
+    if (Number(data.code) !== 0 && wrongJavaCrashInstances.has(data.instanceId)) {
+      alert(`${label}: wrong Java version was used. Change it in Installations.`);
       setStatus("Wrong Java version was used. Change it in Installations.");
     }
 
+    wrongJavaCrashInstances.delete(data.instanceId);
+
+    renderConsoleInstanceSelect();
     loadDiscordStatus();
   });
 
   window.launcherAPI.events.onUpdaterStatus((data) => {
+    if (data?.type && data.type !== "manual-check-started") {
+      state.launcherUpdate = data;
+      refreshWidget("launcherupdate");
+    }
+
     const downloadBtn = $("#downloadUpdateBtn");
     const installBtn = $("#installUpdateBtn");
 
@@ -3814,17 +4119,1611 @@ window.addEventListener("dragover", (event) => {
 window.addEventListener("drop", (event) => {
   event.preventDefault();
 });
+
+const HOME_WIDGETS_KEY = "launcher.homeWidgets.v1";
+const SERVER_STATUS_TTL_MS = 60 * 1000;
+const MINECRAFT_NEWS_URL = "https://www.minecraft.net/en-us/articles";
+
+const DEFAULT_SERVERS = [
+  { name: "McPvP", ip: "mcpvp.club" },
+  { name: "Starlight", ip: "mc.wawe.cc" },
+  { name: "Hypixel", ip: "hypixel.net" },
+  { name: "Hoplite", ip: "hoplite.gg" },
+  { name: "DonutSMP", ip: "donutsmp.com" },
+];
+
+const HOME_WIDGET_DEFS = {
+  servers: {
+    title: "Servers",
+    defaultEnabled: true,
+    weight: 2,
+    defaults: () => ({ servers: DEFAULT_SERVERS.map((server) => ({ ...server })) }),
+  },
+  skin: {
+    title: "Player skin",
+    defaultEnabled: true,
+    weight: 1,
+    defaults: () => ({ animation: "walk", autoRotate: true, showCape: true, showName: true }),
+  },
+  time: {
+    title: "Time",
+    defaultEnabled: true,
+    weight: 1,
+    defaults: () => ({ use24h: true, showSeconds: false, showDate: true }),
+  },
+  quickstart: {
+    title: "Quick start",
+    defaultEnabled: false,
+    weight: 1,
+    defaults: () => ({ profileIds: [] }),
+  },
+  players: {
+    title: "Player count",
+    defaultEnabled: false,
+    weight: 1,
+    defaults: () => ({ ip: "hypixel.net", label: "Hypixel", showMotd: true }),
+  },
+  mcupdate: {
+    title: "Minecraft update",
+    defaultEnabled: false,
+    weight: 1,
+    defaults: () => ({ showSnapshot: true }),
+  },
+  launcherupdate: {
+    title: "Launcher update",
+    defaultEnabled: false,
+    weight: 1,
+    defaults: () => ({}),
+  },
+  console: {
+    title: "Console",
+    defaultEnabled: false,
+    weight: 2,
+    defaults: () => ({ lines: 8, source: "all" }),
+  },
+};
+
+const homeWidgets = {
+  config: null,
+  editing: false,
+  mounted: new Map(),
+  openSettingsId: null,
+  serverStatusCache: new Map(),
+  clockTimer: null,
+  latestVersions: null,
+  appInfo: null,
+  dragId: null,
+};
+
+function defaultHomeWidgetConfig() {
+  const ids = Object.keys(HOME_WIDGET_DEFS);
+
+  return {
+    order: ids,
+    enabled: Object.fromEntries(ids.map((id) => [id, HOME_WIDGET_DEFS[id].defaultEnabled])),
+    settings: Object.fromEntries(ids.map((id) => [id, HOME_WIDGET_DEFS[id].defaults()])),
+  };
+}
+
+function loadHomeWidgetConfig() {
+  const fallback = defaultHomeWidgetConfig();
+  let saved = null;
+
+  try {
+    saved = JSON.parse(localStorage.getItem(HOME_WIDGETS_KEY) || "null");
+  } catch {
+    saved = null;
+  }
+
+  if (!saved || typeof saved !== "object") return fallback;
+
+  const known = Object.keys(HOME_WIDGET_DEFS);
+  const order = Array.isArray(saved.order) ? saved.order.filter((id) => known.includes(id)) : [];
+
+  for (const id of known) {
+    if (!order.includes(id)) order.push(id);
+  }
+
+  const enabled = {};
+  const settings = {};
+
+  for (const id of known) {
+    enabled[id] =
+      typeof saved.enabled?.[id] === "boolean" ? saved.enabled[id] : fallback.enabled[id];
+    settings[id] = { ...fallback.settings[id], ...(saved.settings?.[id] || {}) };
+  }
+
+  return { order, enabled, settings };
+}
+
+function saveHomeWidgetConfig() {
+  try {
+    localStorage.setItem(HOME_WIDGETS_KEY, JSON.stringify(homeWidgets.config));
+  } catch (error) {
+    console.warn("[widgets] Could not save layout:", error);
+  }
+}
+
+function widgetSettings(id) {
+  return homeWidgets.config.settings[id];
+}
+
+function enabledWidgetIds() {
+  return homeWidgets.config.order.filter((id) => homeWidgets.config.enabled[id]);
+}
+
+function cloneTemplate(id) {
+  const template = document.getElementById(id);
+  return template ? template.content.firstElementChild.cloneNode(true) : null;
+}
+
+function slot(root, name) {
+  return root?.querySelector(`[data-slot="${name}"]`) || null;
+}
+
+function columnsForCount(count) {
+  if (count <= 3) return Math.max(1, count);
+  if (count === 4) return 2;
+  if (count <= 6) return 3;
+  return 4;
+}
+
+function computeWidgetLayout(ids) {
+  const cols = columnsForCount(ids.length);
+  const rows = [];
+  let current = [];
+  let used = 0;
+
+  for (const id of ids) {
+    const weight = cols >= 3 ? Math.min(HOME_WIDGET_DEFS[id].weight || 1, 2) : 1;
+
+    if (used + weight > cols && current.length > 0) {
+      rows.push(current);
+      current = [];
+      used = 0;
+    }
+
+    current.push({ id, weight });
+    used += weight;
+  }
+
+  if (current.length > 0) rows.push(current);
+
+  const placements = [];
+
+  for (const row of rows) {
+    const totalWeight = row.reduce((sum, item) => sum + item.weight, 0);
+    let remaining = 12;
+
+    row.forEach((item, index) => {
+      const span =
+        index === row.length - 1 ? remaining : Math.round((12 * item.weight) / totalWeight);
+      remaining -= span;
+      placements.push({ id: item.id, span });
+    });
+  }
+
+  return { rows: rows.length, placements };
+}
+
+function applyWidgetLayout() {
+  const board = $("#homeWidgetBoard");
+  if (!board) return;
+
+  const ids = enabledWidgetIds();
+  const layout = computeWidgetLayout(ids);
+
+  board.style.setProperty("--widget-rows", String(Math.max(1, layout.rows)));
+  board.dataset.count = String(ids.length);
+
+  for (const placement of layout.placements) {
+    const mounted = homeWidgets.mounted.get(placement.id);
+    if (mounted) mounted.element.style.gridColumn = `span ${placement.span}`;
+  }
+}
+
+function unmountWidget(id) {
+  const mounted = homeWidgets.mounted.get(id);
+  if (!mounted) return;
+
+  try {
+    mounted.cleanup?.();
+  } catch {}
+
+  mounted.element.remove();
+  homeWidgets.mounted.delete(id);
+}
+
+function mountWidget(id) {
+  const def = HOME_WIDGET_DEFS[id];
+  const element = cloneTemplate("widgetShellTemplate");
+  const content = cloneTemplate(`widget-tpl-${id}`);
+
+  if (!def || !element || !content) return null;
+
+  element.dataset.widgetId = id;
+  element.classList.add(`home-widget-${id}`);
+  element.querySelector(".home-widget-title").textContent = def.title;
+
+  const body = element.querySelector(".home-widget-body");
+  body.appendChild(content);
+
+  element.querySelector('[data-widget-action="hide"]').addEventListener("click", () => {
+    setWidgetEnabled(id, false);
+  });
+
+  element.querySelector('[data-widget-action="settings"]').addEventListener("click", () => {
+    openCustomizePanel(id);
+  });
+
+  bindBoardDrag(element, id);
+
+  const mounted = { element, body, cleanup: null };
+  homeWidgets.mounted.set(id, mounted);
+
+  mounted.cleanup = WIDGET_RENDERERS[id]?.mount?.(body, widgetSettings(id)) || null;
+
+  return element;
+}
+
+function renderHomeWidgets() {
+  const board = $("#homeWidgetBoard");
+  if (!board || !homeWidgets.config) return;
+
+  const ids = enabledWidgetIds();
+
+  for (const id of Array.from(homeWidgets.mounted.keys())) {
+    if (!ids.includes(id)) unmountWidget(id);
+  }
+
+  for (const id of ids) {
+    const element = homeWidgets.mounted.get(id)?.element || mountWidget(id);
+    if (element) board.appendChild(element);
+  }
+
+  for (const mounted of homeWidgets.mounted.values()) {
+    mounted.element.draggable = homeWidgets.editing;
+  }
+
+  board.classList.toggle("editing", homeWidgets.editing);
+  board.classList.toggle("empty", ids.length === 0);
+
+  applyWidgetLayout();
+  updateWidgetClock();
+}
+
+function refreshWidget(id) {
+  const mounted = homeWidgets.mounted.get(id);
+  if (!mounted) return;
+
+  WIDGET_RENDERERS[id]?.update?.(mounted.body, widgetSettings(id));
+}
+
+function remountWidget(id) {
+  if (!homeWidgets.mounted.has(id)) return;
+
+  unmountWidget(id);
+  renderHomeWidgets();
+}
+
+function setWidgetEnabled(id, enabled) {
+  homeWidgets.config.enabled[id] = Boolean(enabled);
+  saveHomeWidgetConfig();
+  renderHomeWidgets();
+  renderWidgetList();
+}
+
+function moveWidget(id, targetIndex) {
+  const order = homeWidgets.config.order.filter((item) => item !== id);
+  const index = Math.max(0, Math.min(order.length, targetIndex));
+
+  order.splice(index, 0, id);
+  homeWidgets.config.order = order;
+
+  saveHomeWidgetConfig();
+  renderHomeWidgets();
+  renderWidgetList();
+}
+
+async function getServerStatus(ip) {
+  const address = String(ip || "")
+    .trim()
+    .toLowerCase();
+  if (!address) return null;
+
+  const cached = homeWidgets.serverStatusCache.get(address);
+  const now = Date.now();
+
+  if (cached?.data && now - cached.at < SERVER_STATUS_TTL_MS) return cached.data;
+  if (cached?.promise) return cached.promise;
+
+  const promise = fetch(`https://api.mcsrvstat.us/3/${encodeURIComponent(address)}`)
+    .then((response) => (response.ok ? response.json() : { online: false }))
+    .catch(() => ({ online: false }))
+    .then((data) => {
+      homeWidgets.serverStatusCache.set(address, { at: Date.now(), data });
+      return data;
+    });
+
+  homeWidgets.serverStatusCache.set(address, { ...(cached || {}), promise });
+  return promise;
+}
+
+function serverMotd(data) {
+  const lines = data?.motd?.clean;
+  return Array.isArray(lines) ? lines.join(" ").replace(/\s+/g, " ").trim() : "";
+}
+
+function formatPlayerNumber(value) {
+  return new Intl.NumberFormat().format(Number(value || 0));
+}
+
+function widgetSkinSource() {
+  if (!state.account?.username || state.account.type === "offline")
+    return { skin: DEFAULT_STEVE_SKIN, cape: "", slim: false };
+
+  const skin = getCurrentSkinFromMinecraftProfile();
+  const cape = getActiveCapeFromMinecraftProfile?.();
+
+  return {
+    skin: skin?.url || DEFAULT_STEVE_SKIN,
+    cape: cape?.url ? cape.url.replace(/^http:\/\//i, "https://") : "",
+    slim: String(skin?.variant || "").toUpperCase() === "SLIM",
+  };
+}
+
+async function ensureSkinProfileForWidgets() {
+  if (!state.account?.username || state.account.type === "offline") return;
+  if (state.skins.minecraftProfile) return;
+
+  try {
+    state.skins.minecraftProfile = await window.launcherAPI.skins.getMinecraftProfile();
+  } catch {}
+}
+
+async function ensureLatestMinecraftVersions() {
+  if (homeWidgets.latestVersions) return homeWidgets.latestVersions;
+
+  try {
+    const versions = await window.launcherAPI.profiles.listMinecraftVersions({
+      includeSnapshots: true,
+    });
+
+    homeWidgets.latestVersions = {
+      release: versions.find((version) => version.type === "release") || null,
+      snapshot: versions.find((version) => version.type === "snapshot") || null,
+    };
+  } catch {
+    homeWidgets.latestVersions = { release: null, snapshot: null, failed: true };
+  }
+
+  return homeWidgets.latestVersions;
+}
+
+function updateWidgetClock() {
+  const needsClock = homeWidgets.mounted.has("time");
+
+  if (needsClock && !homeWidgets.clockTimer) {
+    homeWidgets.clockTimer = setInterval(() => refreshWidget("time"), 1000);
+  }
+
+  if (!needsClock && homeWidgets.clockTimer) {
+    clearInterval(homeWidgets.clockTimer);
+    homeWidgets.clockTimer = null;
+  }
+}
+
+const WIDGET_RENDERERS = {
+  servers: {
+    mount(body, settings) {
+      this.update(body, settings);
+    },
+
+    update(body, settings) {
+      const rowsRoot = slot(body, "rows");
+      const servers = (settings.servers || []).filter((server) => server.ip);
+
+      slot(body, "empty")?.classList.toggle("hidden", servers.length > 0);
+      rowsRoot.innerHTML = "";
+
+      for (const server of servers) {
+        const row = cloneTemplate("widget-row-tpl-servers");
+
+        slot(row, "name").textContent = server.name || server.ip;
+        slot(row, "ip").textContent = server.ip;
+        rowsRoot.appendChild(row);
+
+        getServerStatus(server.ip).then((data) => {
+          const players = slot(row, "players");
+          const icon = slot(row, "icon");
+
+          if (!data?.online) {
+            players.textContent = "Offline";
+            players.classList.add("offline");
+            return;
+          }
+
+          players.textContent = `${formatPlayerNumber(data.players?.online)}/${formatPlayerNumber(
+            data.players?.max
+          )}`;
+          players.classList.remove("offline");
+
+          if (data.icon && String(data.icon).startsWith("data:image/")) {
+            icon.src = data.icon;
+            icon.classList.remove("hidden");
+          }
+        });
+      }
+    },
+  },
+
+  players: {
+    mount(body, settings) {
+      this.update(body, settings);
+    },
+
+    update(body, settings) {
+      const count = slot(body, "count");
+      const max = slot(body, "max");
+      const label = slot(body, "label");
+      const motd = slot(body, "motd");
+      const icon = slot(body, "icon");
+
+      label.textContent = settings.label || settings.ip || "Server";
+
+      if (!settings.ip) {
+        count.textContent = "–";
+        max.textContent = "Set a server IP in Customize.";
+        motd.textContent = "";
+        return;
+      }
+
+      getServerStatus(settings.ip).then((data) => {
+        if (!data?.online) {
+          count.textContent = "Offline";
+          count.classList.add("offline");
+          max.textContent = settings.ip;
+          motd.textContent = "";
+          icon.classList.add("hidden");
+          return;
+        }
+
+        count.classList.remove("offline");
+        count.textContent = formatPlayerNumber(data.players?.online);
+        max.textContent = `of ${formatPlayerNumber(data.players?.max)} online`;
+        motd.textContent = settings.showMotd ? serverMotd(data) : "";
+
+        if (data.icon && String(data.icon).startsWith("data:image/")) {
+          icon.src = data.icon;
+          icon.classList.remove("hidden");
+        }
+      });
+    },
+  },
+
+  time: {
+    mount(body, settings) {
+      this.update(body, settings);
+    },
+
+    update(body, settings) {
+      const now = new Date();
+
+      slot(body, "time").textContent = now.toLocaleTimeString([], {
+        hour: "2-digit",
+        minute: "2-digit",
+        second: settings.showSeconds ? "2-digit" : undefined,
+        hour12: !settings.use24h,
+      });
+
+      const date = slot(body, "date");
+      date.classList.toggle("hidden", !settings.showDate);
+      date.textContent = now.toLocaleDateString([], {
+        weekday: "long",
+        day: "numeric",
+        month: "long",
+      });
+    },
+  },
+
+  quickstart: {
+    mount(body, settings) {
+      this.update(body, settings);
+    },
+
+    update(body, settings) {
+      const list = slot(body, "list");
+      const profiles = state.profilesData?.profiles || [];
+
+      let ids = (settings.profileIds || []).filter((id) => profiles.some((p) => p.id === id));
+      if (ids.length === 0) ids = profiles.slice(0, 3).map((profile) => profile.id);
+
+      list.innerHTML = "";
+      slot(body, "empty")?.classList.toggle("hidden", ids.length > 0);
+
+      for (const id of ids.slice(0, 6)) {
+        const profile = findProfile(id);
+        if (!profile) continue;
+
+        const item = cloneTemplate("widget-row-tpl-quickstart");
+        const running = runningInstancesForProfile(profile.id).length;
+
+        slot(item, "icon").innerHTML = renderInstallationIconHtml(profile);
+        slot(item, "name").textContent = profile.name;
+        slot(item, "sub").textContent = running
+          ? `Running${running > 1 ? ` ×${running}` : ""}`
+          : `${loaderLabel(profile.loaderType)} · ${profile.minecraftVersion || "?"}`;
+        item.classList.toggle("running", running > 0);
+        item.title = `Start ${profile.name}`;
+
+        item.addEventListener("click", async () => {
+          if (homeWidgets.editing) return;
+
+          await selectProfile(profile.id);
+          $("#launchBtn")?.click();
+        });
+
+        list.appendChild(item);
+      }
+    },
+  },
+
+  mcupdate: {
+    mount(body, settings) {
+      body.querySelector('[data-action="mc-news"]')?.addEventListener("click", () => {
+        openExternalLink(MINECRAFT_NEWS_URL);
+      });
+
+      this.update(body, settings);
+    },
+
+    update(body, settings) {
+      slot(body, "snapshotRow")?.classList.toggle("hidden", !settings.showSnapshot);
+
+      ensureLatestMinecraftVersions().then((latest) => {
+        const release = latest.release;
+        const releaseDate = release?.releaseTime ? new Date(release.releaseTime) : null;
+        const ageDays = releaseDate ? (Date.now() - releaseDate.getTime()) / 86400000 : Infinity;
+
+        slot(body, "release").textContent = release?.id || (latest.failed ? "Offline" : "–");
+        slot(body, "snapshot").textContent = latest.snapshot?.id || "–";
+        slot(body, "releaseNew")?.classList.toggle("hidden", !(ageDays <= 14));
+        slot(body, "releaseDate").textContent = releaseDate
+          ? `Released ${releaseDate.toLocaleDateString()}`
+          : "";
+      });
+    },
+  },
+
+  launcherupdate: {
+    mount(body, settings) {
+      body.querySelector('[data-action="check-updates"]')?.addEventListener("click", async () => {
+        slot(body, "launcherStatus").textContent = "Checking...";
+        await window.launcherAPI.updater.check();
+        await checkDefaultClientInfoManually();
+        this.update(body, settings);
+      });
+
+      body.querySelector('[data-action="install-update"]')?.addEventListener("click", () => {
+        window.launcherAPI.updater.install();
+      });
+
+      if (!homeWidgets.appInfo) {
+        window.launcherAPI.system
+          .getAppInfo?.()
+          .then((info) => {
+            homeWidgets.appInfo = info;
+            this.update(body, settings);
+          })
+          .catch(() => {});
+      }
+
+      this.update(body, settings);
+    },
+
+    update(body) {
+      const launcher = state.launcherUpdate || {};
+      const client = state.clientUpdateInfo || null;
+
+      slot(body, "launcherVersion").textContent = homeWidgets.appInfo?.version
+        ? `v${homeWidgets.appInfo.version}`
+        : "…";
+
+      const launcherText = {
+        checking: "Checking for updates...",
+        available: `Update ${launcher.info?.version || ""} available, downloading...`,
+        "not-available": "Up to date.",
+        "download-progress": `Downloading update: ${Math.round(launcher.progress?.percent || 0)}%`,
+        downloaded: "Update ready. Restart to install.",
+        "dev-mode": launcher.message || "Updates only work in the installed app.",
+        error: "Update check failed.",
+      }[launcher.type];
+
+      slot(body, "launcherStatus").textContent = launcherText || "Not checked yet.";
+
+      body
+        .querySelector('[data-action="install-update"]')
+        ?.classList.toggle("hidden", launcher.type !== "downloaded");
+
+      slot(body, "clientVersion").textContent = client?.localClientVersion
+        ? `v${client.localClientVersion}`
+        : client?.remoteClientVersion
+          ? `v${client.remoteClientVersion}`
+          : "…";
+
+      slot(body, "clientStatus").textContent = !client
+        ? "Not checked yet."
+        : client.updateAvailable
+          ? `Update to v${client.remoteClientVersion} available.`
+          : "Up to date.";
+    },
+  },
+
+  console: {
+    mount(body, settings) {
+      slot(body, "output")?.addEventListener("click", () => {
+        if (!homeWidgets.editing) showPage("console");
+      });
+
+      this.update(body, settings);
+    },
+
+    update(body, settings) {
+      const output = slot(body, "output");
+      if (!output) return;
+
+      let key = settings.source === "launcher" ? CONSOLE_VIEW_LAUNCHER : CONSOLE_VIEW_ALL;
+
+      if (settings.source === "latest") {
+        const latest = Array.from(consoleStore.instances.values()).sort(
+          (a, b) => (b.startedAt || 0) - (a.startedAt || 0)
+        )[0];
+
+        key = latest ? latest.instanceId : CONSOLE_VIEW_ALL;
+      }
+
+      const lines = consoleStore.buffers.get(key) || [];
+      const count = Math.max(3, Math.min(20, Number(settings.lines) || 8));
+
+      output.textContent = lines.slice(-count).join("\n") || "No output yet.";
+    },
+  },
+
+  skin: {
+    mount(body, settings) {
+      const canvas = slot(body, "canvas");
+      const nameEl = slot(body, "name");
+      let viewer = null;
+      let disposed = false;
+
+      nameEl.textContent = state.account?.username || "Steve";
+      nameEl.classList.toggle("hidden", !settings.showName);
+
+      const canvasSize = () => {
+        const rect = body.getBoundingClientRect();
+        const padding = 16;
+        return {
+          width: Math.max(80, Math.floor(rect.width - padding)),
+          height: Math.max(100, Math.floor(rect.height - padding - (settings.showName ? 28 : 0))),
+        };
+      };
+
+      const build = () => {
+        if (disposed || !canvas) return;
+
+        const { width, height } = canvasSize();
+        const source = widgetSkinSource();
+
+        if (!window.skinview3d?.SkinViewer) {
+          canvas.width = width;
+          canvas.height = height;
+          drawMinecraftSkin(canvas, source.skin);
+          return;
+        }
+
+        viewer = new window.skinview3d.SkinViewer({ canvas, width, height });
+        viewer.background = null;
+        viewer.zoom = 0.85;
+
+        if (viewer.controls) {
+          viewer.controls.enableZoom = false;
+          viewer.controls.enablePan = false;
+        }
+
+        Promise.resolve(
+          viewer.loadSkin?.(source.skin, { model: source.slim ? "slim" : "default" })
+        ).catch(() => viewer?.loadSkin?.(DEFAULT_STEVE_SKIN));
+
+        if (settings.showCape && source.cape) {
+          Promise.resolve(viewer.loadCape?.(source.cape)).catch(() => {});
+        }
+
+        const animations = {
+          idle: "IdleAnimation",
+          walk: "WalkingAnimation",
+          run: "RunningAnimation",
+          wave: "WaveAnimation",
+          fly: "FlyingAnimation",
+        };
+
+        const AnimationClass = window.skinview3d[animations[settings.animation]];
+        viewer.animation = AnimationClass ? new AnimationClass() : null;
+
+        viewer.autoRotate = Boolean(settings.autoRotate);
+        viewer.autoRotateSpeed = 0.9;
+      };
+
+      const resizeObserver = new ResizeObserver(() => {
+        if (!viewer) return;
+        const { width, height } = canvasSize();
+        viewer.setSize?.(width, height);
+      });
+
+      resizeObserver.observe(body);
+      ensureSkinProfileForWidgets().then(build);
+
+      return () => {
+        disposed = true;
+        resizeObserver.disconnect();
+        destroySkinViewer(viewer);
+        viewer = null;
+      };
+    },
+  },
+};
+
+function openCustomizePanel(settingsId = null) {
+  homeWidgets.editing = true;
+  homeWidgets.openSettingsId = settingsId;
+
+  $("#homeCustomizePanel")?.classList.remove("hidden");
+  $("#page-home")?.classList.add("home-editing");
+
+  renderHomeWidgets();
+  renderWidgetList();
+
+  if (settingsId) {
+    $(`.home-widget-row[data-widget-id="${settingsId}"]`)?.scrollIntoView({ block: "nearest" });
+  }
+}
+
+function closeCustomizePanel() {
+  homeWidgets.editing = false;
+  homeWidgets.openSettingsId = null;
+
+  $("#homeCustomizePanel")?.classList.add("hidden");
+  $("#page-home")?.classList.remove("home-editing");
+
+  renderHomeWidgets();
+}
+
+function renderWidgetList() {
+  const list = $("#homeWidgetList");
+  if (!list || !homeWidgets.editing) return;
+
+  list.innerHTML = "";
+
+  homeWidgets.config.order.forEach((id, index) => {
+    const def = HOME_WIDGET_DEFS[id];
+    const row = cloneTemplate("widgetListRowTemplate");
+
+    row.dataset.widgetId = id;
+    row.classList.toggle("disabled", !homeWidgets.config.enabled[id]);
+    row.querySelector(".home-widget-row-name").textContent = def.title;
+
+    const toggle = row.querySelector('[data-row-action="toggle"]');
+    toggle.checked = Boolean(homeWidgets.config.enabled[id]);
+    toggle.addEventListener("change", () => setWidgetEnabled(id, toggle.checked));
+
+    const up = row.querySelector('[data-row-action="up"]');
+    const down = row.querySelector('[data-row-action="down"]');
+    up.disabled = index === 0;
+    down.disabled = index === homeWidgets.config.order.length - 1;
+    up.addEventListener("click", () => moveWidget(id, index - 1));
+    down.addEventListener("click", () => moveWidget(id, index + 1));
+
+    const settingsBox = row.querySelector(".home-widget-row-settings");
+    const settingsBtn = row.querySelector('[data-row-action="settings"]');
+    const hasSettings = Boolean(document.getElementById(`widget-settings-tpl-${id}`));
+
+    settingsBtn.classList.toggle("invisible", !hasSettings);
+    settingsBtn.addEventListener("click", () => {
+      homeWidgets.openSettingsId = homeWidgets.openSettingsId === id ? null : id;
+      renderWidgetList();
+    });
+
+    if (hasSettings && homeWidgets.openSettingsId === id) {
+      settingsBox.classList.remove("hidden");
+      settingsBtn.classList.add("active");
+      settingsBox.appendChild(buildWidgetSettingsForm(id));
+    }
+
+    bindListDrag(row, id);
+    list.appendChild(row);
+  });
+}
+
+function buildWidgetSettingsForm(id) {
+  const form = cloneTemplate(`widget-settings-tpl-${id}`);
+  const settings = widgetSettings(id);
+
+  form.querySelectorAll("[data-setting]").forEach((input) => {
+    const key = input.dataset.setting;
+
+    if (input.type === "checkbox") input.checked = Boolean(settings[key]);
+    else input.value = settings[key] ?? "";
+
+    const apply = () => {
+      if (input.type === "checkbox") settings[key] = input.checked;
+      else if (input.type === "range" || input.type === "number")
+        settings[key] = Number(input.value);
+      else settings[key] = input.value.trim();
+
+      saveHomeWidgetConfig();
+
+      if (id === "skin") remountWidget(id);
+      else refreshWidget(id);
+    };
+
+    const isText = input.tagName === "INPUT" && !["checkbox", "range"].includes(input.type);
+    input.addEventListener(isText ? "change" : "input", apply);
+  });
+
+  if (id === "servers") bindServerEditor(form);
+  if (id === "quickstart") bindQuickstartChecks(form);
+
+  return form;
+}
+
+function bindServerEditor(form) {
+  const settings = widgetSettings("servers");
+  const editor = slot(form, "serverEditor");
+
+  const commit = () => {
+    settings.servers = Array.from(editor.querySelectorAll(".widget-server-editor-row"))
+      .map((row) => ({
+        name: row.querySelector('[data-field="name"]').value.trim(),
+        ip: row
+          .querySelector('[data-field="ip"]')
+          .value.trim()
+          .replace(/^https?:\/\//i, "")
+          .replace(/\/.*$/, ""),
+      }))
+      .filter((server) => server.name || server.ip);
+
+    saveHomeWidgetConfig();
+    refreshWidget("servers");
+  };
+
+  const addRow = (server = { name: "", ip: "" }) => {
+    const row = cloneTemplate("widget-server-editor-row-tpl");
+
+    row.querySelector('[data-field="name"]').value = server.name || "";
+    row.querySelector('[data-field="ip"]').value = server.ip || "";
+    row.querySelectorAll("input").forEach((input) => input.addEventListener("change", commit));
+    row.querySelector('[data-action="remove-server"]').addEventListener("click", () => {
+      row.remove();
+      commit();
+    });
+
+    editor.appendChild(row);
+    return row;
+  };
+
+  (settings.servers || []).forEach((server) => addRow(server));
+
+  form.querySelector('[data-action="add-server"]')?.addEventListener("click", () => {
+    if (editor.children.length >= 8) return;
+    addRow().querySelector('[data-field="name"]').focus();
+  });
+}
+
+function bindQuickstartChecks(form) {
+  const settings = widgetSettings("quickstart");
+  const box = slot(form, "profileChecks");
+  const profiles = state.profilesData?.profiles || [];
+
+  let selected = (settings.profileIds || []).filter((id) => profiles.some((p) => p.id === id));
+  if (selected.length === 0) selected = profiles.slice(0, 3).map((profile) => profile.id);
+
+  for (const profile of profiles) {
+    const label = document.createElement("label");
+    label.className = "widget-check";
+    label.innerHTML = `<input type="checkbox" /><span class="mcr"></span>`;
+    label.querySelector("span").textContent = profile.name;
+
+    const input = label.querySelector("input");
+    input.checked = selected.includes(profile.id);
+
+    input.addEventListener("change", () => {
+      const next = new Set(selected);
+
+      if (input.checked) next.add(profile.id);
+      else next.delete(profile.id);
+
+      if (next.size > 6) {
+        input.checked = false;
+        return;
+      }
+
+      selected = profiles.map((p) => p.id).filter((pid) => next.has(pid));
+      settings.profileIds = selected;
+      saveHomeWidgetConfig();
+      refreshWidget("quickstart");
+    });
+
+    box.appendChild(label);
+  }
+}
+
+function dropIndexFromEvent(container, selector, event) {
+  const items = Array.from(container.querySelectorAll(selector));
+
+  for (let index = 0; index < items.length; index += 1) {
+    const rect = items[index].getBoundingClientRect();
+    const isGrid = container.id === "homeWidgetBoard";
+    const before = isGrid
+      ? event.clientY < rect.top + rect.height / 2 ||
+        (event.clientY <= rect.bottom && event.clientX < rect.left + rect.width / 2)
+      : event.clientY < rect.top + rect.height / 2;
+
+    if (before) return index;
+  }
+
+  return items.length;
+}
+
+function clearDropMarkers() {
+  $$(".drop-before, .drop-after, .dragging").forEach((element) =>
+    element.classList.remove("drop-before", "drop-after", "dragging")
+  );
+}
+
+function bindListDrag(row, id) {
+  row.addEventListener("dragstart", (event) => {
+    homeWidgets.dragId = id;
+    row.classList.add("dragging");
+    event.dataTransfer.effectAllowed = "move";
+    event.dataTransfer.setData("text/plain", id);
+  });
+
+  row.addEventListener("dragend", () => {
+    homeWidgets.dragId = null;
+    clearDropMarkers();
+  });
+
+  row.addEventListener("dragover", (event) => {
+    if (!homeWidgets.dragId || homeWidgets.dragId === id) return;
+
+    event.preventDefault();
+    const rect = row.getBoundingClientRect();
+    const before = event.clientY < rect.top + rect.height / 2;
+
+    row.classList.toggle("drop-before", before);
+    row.classList.toggle("drop-after", !before);
+  });
+
+  row.addEventListener("dragleave", () => row.classList.remove("drop-before", "drop-after"));
+
+  row.addEventListener("drop", (event) => {
+    event.preventDefault();
+
+    const dragged = homeWidgets.dragId;
+    if (!dragged || dragged === id) return;
+
+    const order = homeWidgets.config.order.filter((item) => item !== dragged);
+    const rect = row.getBoundingClientRect();
+    const before = event.clientY < rect.top + rect.height / 2;
+    const targetIndex = order.indexOf(id) + (before ? 0 : 1);
+
+    clearDropMarkers();
+    moveWidget(dragged, targetIndex);
+  });
+}
+
+function bindBoardDrag(element, id) {
+  element.addEventListener("dragstart", (event) => {
+    if (!homeWidgets.editing) {
+      event.preventDefault();
+      return;
+    }
+
+    homeWidgets.dragId = id;
+    element.classList.add("dragging");
+    event.dataTransfer.effectAllowed = "move";
+    event.dataTransfer.setData("text/plain", id);
+  });
+
+  element.addEventListener("dragend", () => {
+    homeWidgets.dragId = null;
+    clearDropMarkers();
+  });
+
+  element.addEventListener("dragover", (event) => {
+    if (!homeWidgets.editing || !homeWidgets.dragId || homeWidgets.dragId === id) return;
+
+    event.preventDefault();
+    const rect = element.getBoundingClientRect();
+    const before = event.clientX < rect.left + rect.width / 2;
+
+    element.classList.toggle("drop-before", before);
+    element.classList.toggle("drop-after", !before);
+  });
+
+  element.addEventListener("dragleave", () =>
+    element.classList.remove("drop-before", "drop-after")
+  );
+
+  element.addEventListener("drop", (event) => {
+    event.preventDefault();
+
+    const dragged = homeWidgets.dragId;
+    if (!dragged || dragged === id) return;
+
+    const rect = element.getBoundingClientRect();
+    const before = event.clientX < rect.left + rect.width / 2;
+    const order = homeWidgets.config.order.filter((item) => item !== dragged);
+    const targetIndex = order.indexOf(id) + (before ? 0 : 1);
+
+    clearDropMarkers();
+    moveWidget(dragged, targetIndex);
+  });
+}
+
+function refreshDataWidgets() {
+  for (const id of ["servers", "players"]) refreshWidget(id);
+}
+
+let consoleWidgetRefreshScheduled = false;
+
+function scheduleConsoleWidgetRefresh() {
+  if (consoleWidgetRefreshScheduled || !homeWidgets.mounted.has("console")) return;
+
+  consoleWidgetRefreshScheduled = true;
+
+  setTimeout(() => {
+    consoleWidgetRefreshScheduled = false;
+    refreshWidget("console");
+  }, 250);
+}
+
+function initHomeWidgets() {
+  homeWidgets.config = loadHomeWidgetConfig();
+
+  $("#homeCustomizeBtn")?.addEventListener("click", () => {
+    showPage("home");
+    showHomeTab("home");
+    openCustomizePanel();
+  });
+
+  $("#homeCustomizeDoneBtn")?.addEventListener("click", closeCustomizePanel);
+
+  $("#homeWidgetsResetBtn")?.addEventListener("click", () => {
+    if (!confirm("Reset home widgets to the default layout?")) return;
+
+    for (const id of Array.from(homeWidgets.mounted.keys())) unmountWidget(id);
+
+    homeWidgets.config = defaultHomeWidgetConfig();
+    homeWidgets.openSettingsId = null;
+    saveHomeWidgetConfig();
+    renderHomeWidgets();
+    renderWidgetList();
+  });
+
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && homeWidgets.editing) closeCustomizePanel();
+  });
+
+  renderHomeWidgets();
+}
+
+let welcomeAnimationTimer = null;
+
+function playWelcomeAnimation(account) {
+  const overlay = $("#welcomeOverlay");
+  if (!overlay || !account?.username) return;
+
+  $("#welcomeName").textContent = account.username;
+
+  const welcomeHead = $("#welcomeHead");
+  const sidebarHead = $("#playerHead");
+
+  welcomeHead.onerror = () => {
+    welcomeHead.onerror = null;
+    welcomeHead.src = DEFAULT_PLAYER_HEAD;
+  };
+
+  welcomeHead.src =
+    account.type === "offline" ? DEFAULT_PLAYER_HEAD : sidebarHead?.src || DEFAULT_PLAYER_HEAD;
+
+  overlay.classList.add("hidden");
+  void overlay.offsetWidth;
+  overlay.classList.remove("hidden");
+
+  clearTimeout(welcomeAnimationTimer);
+  welcomeAnimationTimer = setTimeout(() => overlay.classList.add("hidden"), 2900);
+}
+
+const DEVELOPER_SEQUENCE = [
+  "ArrowUp",
+  "ArrowUp",
+  "ArrowDown",
+  "ArrowDown",
+  "ArrowLeft",
+  "ArrowRight",
+  "ArrowLeft",
+  "ArrowRight",
+  "Enter",
+];
+
+let developerSequenceIndex = 0;
+let pageBeforeDeveloper = "home";
+
+function setDevStatus(text, kind = "") {
+  const status = $("#devOfflineStatus");
+  if (!status) return;
+
+  status.textContent = text;
+  status.classList.toggle("error", kind === "error");
+  status.classList.toggle("ok", kind === "ok");
+}
+
+function renderDeveloperInstances() {
+  const text = $("#devInstancesText");
+  if (!text) return;
+
+  const list = state.runningInstances || [];
+
+  text.textContent =
+    list.length === 0
+      ? "None."
+      : list
+          .map(
+            (instance) =>
+              `${instance.profileName} #${instance.number} (${instance.status}, pid ${instance.pid || "?"})`
+          )
+          .join(" · ");
+}
+
+async function openDeveloperScreen() {
+  if (state.currentPage !== "developer") {
+    pageBeforeDeveloper = state.currentPage || "home";
+  }
+
+  showPage("developer");
+  renderDeveloperInstances();
+
+  const button = $("#devOfflineLoginBtn");
+  const input = $("#devOfflineName");
+
+  try {
+    const eligibility = await window.launcherAPI.auth.getOfflineEligibility();
+
+    if (button) button.disabled = !eligibility.allowed;
+    if (input) input.disabled = !eligibility.allowed;
+
+    setDevStatus(
+      eligibility.allowed
+        ? state.account?.type === "offline"
+          ? `Signed in offline as ${state.account.username}.`
+          : "Ready."
+        : "Locked: sign in once with a Microsoft account that owns Minecraft: Java Edition to unlock offline accounts.",
+      eligibility.allowed ? "" : "error"
+    );
+  } catch (error) {
+    setDevStatus(friendlyErrorMessage(error), "error");
+  }
+
+  appendConsole("[developer] Developer screen opened.");
+}
+
+function handleDeveloperSequence(event) {
+  const expected = DEVELOPER_SEQUENCE[developerSequenceIndex];
+
+  if (event.key === expected) {
+    developerSequenceIndex += 1;
+
+    if (developerSequenceIndex === DEVELOPER_SEQUENCE.length) {
+      developerSequenceIndex = 0;
+      event.preventDefault();
+      openDeveloperScreen();
+    }
+
+    return;
+  }
+
+  developerSequenceIndex = event.key === DEVELOPER_SEQUENCE[0] ? 1 : 0;
+}
+
+async function loginOfflineFromDeveloperScreen() {
+  const input = $("#devOfflineName");
+  const button = $("#devOfflineLoginBtn");
+  const name = String(input?.value || "").trim();
+
+  if (!/^[A-Za-z0-9_]{3,16}$/.test(name)) {
+    setDevStatus("Use 3-16 characters: letters, numbers and underscores only.", "error");
+    input?.focus();
+    return;
+  }
+
+  if (button) button.disabled = true;
+
+  try {
+    const result = await window.launcherAPI.auth.loginOffline(name);
+
+    if (!result?.ok) {
+      setDevStatus(result?.error || "Offline login failed.", "error");
+      return;
+    }
+
+    const account = await loadAccount();
+
+    state.skins.loaded = false;
+    state.skins.minecraftProfile = null;
+    remountWidget("skin");
+
+    setDevStatus(`Signed in offline as ${account?.username || name}.`, "ok");
+    setStatus(`Offline account: ${account?.username || name}.`);
+    appendConsole(`[developer] Offline account active: ${account?.username || name}.`);
+
+    playWelcomeAnimation(account || { username: name });
+  } catch (error) {
+    setDevStatus(friendlyErrorMessage(error, "Offline login failed."), "error");
+  } finally {
+    if (button) button.disabled = false;
+  }
+}
+
+function initDeveloperScreen() {
+  document.addEventListener("keydown", handleDeveloperSequence, true);
+
+  $("#closeDeveloperBtn")?.addEventListener("click", () => {
+    showPage(pageBeforeDeveloper === "developer" ? "home" : pageBeforeDeveloper);
+  });
+
+  $("#devOfflineLoginBtn")?.addEventListener("click", loginOfflineFromDeveloperScreen);
+
+  $("#devOfflineName")?.addEventListener("keydown", (event) => {
+    if (event.key === "Enter") {
+      event.stopPropagation();
+      loginOfflineFromDeveloperScreen();
+    }
+  });
+
+  $("#devReplayWelcomeBtn")?.addEventListener("click", () => {
+    playWelcomeAnimation(state.account?.username ? state.account : { username: "Player" });
+  });
+
+  $("#devResetOnboardingBtn")?.addEventListener("click", () => {
+    localStorage.removeItem(ONBOARDING_DONE_KEY);
+    setStatus("First-start setup will show on the next start.");
+  });
+
+  $("#devResetWidgetsBtn")?.addEventListener("click", () => {
+    for (const id of Array.from(homeWidgets.mounted.keys())) unmountWidget(id);
+
+    homeWidgets.config = defaultHomeWidgetConfig();
+    saveHomeWidgetConfig();
+    renderHomeWidgets();
+    setStatus("Home widgets reset.");
+  });
+
+  $("#devReloadUiBtn")?.addEventListener("click", () => {
+    window.location.reload();
+  });
+
+  $("#devStopAllBtn")?.addEventListener("click", async () => {
+    if (!confirm("Stop every running Minecraft instance?")) return;
+    await window.launcherAPI.launcher.kill();
+  });
+}
+
+const ONBOARDING_DONE_KEY = "launcher.onboardingComplete";
+const ONBOARDING_STEPS = ["welcome", "account", "installation", "preferences", "done"];
+
+const onboarding = {
+  index: 0,
+  selectedProfileId: null,
+};
+
+function isOnboardingComplete() {
+  return localStorage.getItem(ONBOARDING_DONE_KEY) === "true";
+}
+
+function renderOnboardingAccount() {
+  const box = $(".onboarding-account");
+  const name = $("#onboardingAccountName");
+  const sub = $("#onboardingAccountSub");
+  const head = $("#onboardingAccountHead");
+  const button = $("#onboardingLoginBtn");
+
+  const account = state.account;
+  const signedIn = Boolean(account && account.username);
+
+  box?.classList.toggle("signed-in", signedIn);
+
+  if (name) name.textContent = signedIn ? account.username : "Not signed in";
+  if (sub) {
+    sub.textContent = signedIn
+      ? "Signed in with Microsoft."
+      : "You can also do this later from the sidebar.";
+  }
+
+  if (head) {
+    const sidebarHead = $("#playerHead");
+
+    head.onerror = () => {
+      head.onerror = null;
+      head.src = DEFAULT_PLAYER_HEAD;
+    };
+
+    head.src = signedIn && sidebarHead?.src ? sidebarHead.src : DEFAULT_PLAYER_HEAD;
+  }
+
+  if (button) {
+    button.textContent = signedIn ? "Use a different account" : "Login with Microsoft";
+  }
+}
+
+function renderOnboardingProfiles() {
+  const list = $("#onboardingProfileList");
+  if (!list) return;
+
+  const profiles = state.profilesData?.profiles || [];
+
+  if (!onboarding.selectedProfileId) {
+    onboarding.selectedProfileId = selectedProfileId() || profiles[0]?.id || null;
+  }
+
+  list.innerHTML = "";
+
+  for (const profile of profiles) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "onboarding-profile";
+    button.title = profile.name;
+    button.classList.toggle("selected", profile.id === onboarding.selectedProfileId);
+
+    button.innerHTML = `
+      ${renderInstallationIconHtml(profile)}
+      <span class="onboarding-profile-text">
+        <span class="onboarding-profile-name mct">${escapeHtml(profile.name)}</span>
+        <span class="onboarding-profile-sub mcr">${escapeHtml(loaderLabel(profile.loaderType))} · ${escapeHtml(profile.minecraftVersion || "?")}</span>
+      </span>
+    `;
+
+    button.addEventListener("click", () => {
+      onboarding.selectedProfileId = profile.id;
+      renderOnboardingProfiles();
+    });
+
+    list.appendChild(button);
+  }
+}
+
+function renderOnboardingSummary() {
+  const summary = $("#onboardingSummary");
+  if (!summary) return;
+
+  const profile = findProfile(onboarding.selectedProfileId);
+  const parts = [];
+
+  parts.push(
+    state.account?.username
+      ? `Signed in as ${state.account.username}.`
+      : "You're not signed in yet. Use the login button in the sidebar before you launch."
+  );
+
+  if (profile) {
+    parts.push(`${profile.name} is selected. Press Start on the Home page to launch it.`);
+  }
+
+  summary.textContent = parts.join(" ");
+}
+
+function renderOnboardingStep() {
+  const step = ONBOARDING_STEPS[onboarding.index];
+
+  $$(".onboarding-step").forEach((section) => {
+    section.classList.toggle("active", section.dataset.onboardingStep === step);
+  });
+
+  const count = $("#onboardingStepCount");
+  if (count) count.textContent = `Step ${onboarding.index + 1} of ${ONBOARDING_STEPS.length}`;
+
+  const dots = $("#onboardingDots");
+  if (dots) {
+    dots.innerHTML = ONBOARDING_STEPS.map((_, index) => {
+      const cls = index === onboarding.index ? "current" : index < onboarding.index ? "done" : "";
+      return `<span class="onboarding-dot ${cls}"></span>`;
+    }).join("");
+  }
+
+  const back = $("#onboardingBackBtn");
+  back?.classList.toggle("invisible", onboarding.index === 0);
+
+  const next = $("#onboardingNextBtn");
+  if (next) {
+    if (step === "welcome") next.textContent = "Get started";
+    else if (step === "account")
+      next.textContent = state.account?.username ? "Next" : "Skip for now";
+    else if (step === "done") next.textContent = "Finish";
+    else next.textContent = "Next";
+  }
+
+  const skip = $("#onboardingSkipBtn");
+  skip?.classList.toggle("hidden", step === "done");
+
+  if (step === "account") renderOnboardingAccount();
+  if (step === "installation") renderOnboardingProfiles();
+  if (step === "done") renderOnboardingSummary();
+
+  if (step === "preferences") {
+    const settings = getLauncherSettings();
+    const keepOpen = $("#onboardingKeepOpen");
+    const openConsole = $("#onboardingOpenConsole");
+
+    if (keepOpen) keepOpen.checked = settings.keepLauncherOpenOnLaunch;
+    if (openConsole) openConsole.checked = settings.openConsoleOnLaunch;
+  }
+}
+
+function openOnboarding() {
+  onboarding.index = 0;
+  onboarding.selectedProfileId = selectedProfileId() || null;
+
+  $("#onboardingBackdrop")?.classList.remove("hidden");
+  renderOnboardingStep();
+
+  $("#onboardingNextBtn")?.focus();
+}
+
+function closeOnboarding() {
+  localStorage.setItem(ONBOARDING_DONE_KEY, "true");
+  $("#onboardingBackdrop")?.classList.add("hidden");
+}
+
+async function applyOnboardingStep(step) {
+  if (step === "installation" && onboarding.selectedProfileId) {
+    if (onboarding.selectedProfileId !== selectedProfileId()) {
+      await selectProfile(onboarding.selectedProfileId);
+    }
+  }
+
+  if (step === "preferences") {
+    fillLauncherSettingsControls();
+  }
+}
+
+async function onboardingNext() {
+  const step = ONBOARDING_STEPS[onboarding.index];
+
+  try {
+    await applyOnboardingStep(step);
+  } catch (error) {
+    alert(error.message || "Could not save this step.");
+    return;
+  }
+
+  if (onboarding.index >= ONBOARDING_STEPS.length - 1) {
+    closeOnboarding();
+    showPage("home");
+    setStatus("Setup complete.");
+    return;
+  }
+
+  onboarding.index += 1;
+  renderOnboardingStep();
+}
+
+function onboardingBack() {
+  if (onboarding.index === 0) return;
+
+  onboarding.index -= 1;
+  renderOnboardingStep();
+}
+
+async function renderDataFolderSetting() {
+  const pathText = $("#settingsDataDir");
+  const badge = $("#settingsPortableBadge");
+
+  try {
+    const info = homeWidgets.appInfo || (await window.launcherAPI.system.getAppInfo());
+    homeWidgets.appInfo = info;
+
+    if (pathText) pathText.textContent = info.dataDir || "Unknown";
+    badge?.classList.toggle("hidden", !info.portable);
+  } catch {
+    if (pathText) pathText.textContent = "Unknown";
+  }
+}
+
+function initDataFolderSetting() {
+  $("#openDataFolderBtn")?.addEventListener("click", async () => {
+    const dir = homeWidgets.appInfo?.dataDir;
+    if (!dir) return;
+
+    try {
+      await window.launcherAPI.folders.openPath(dir);
+    } catch (error) {
+      alert(friendlyErrorMessage(error, "Could not open the data folder."));
+    }
+  });
+
+  renderDataFolderSetting();
+}
+
+function initOnboardingEvents() {
+  $("#onboardingNextBtn")?.addEventListener("click", onboardingNext);
+  $("#onboardingBackBtn")?.addEventListener("click", onboardingBack);
+
+  $("#onboardingSkipBtn")?.addEventListener("click", () => {
+    closeOnboarding();
+    setStatus("Setup skipped. You can run it again from Settings.");
+  });
+
+  $("#onboardingLoginBtn")?.addEventListener("click", async () => {
+    const button = $("#onboardingLoginBtn");
+
+    if (button) {
+      button.disabled = true;
+      button.textContent = "Opening login...";
+    }
+
+    try {
+      await handleLogin();
+    } finally {
+      if (button) button.disabled = false;
+      renderOnboardingStep();
+    }
+  });
+
+  $("#onboardingKeepOpen")?.addEventListener("change", (event) => {
+    writeBooleanSetting(LAUNCHER_SETTING_KEYS.keepLauncherOpenOnLaunch, event.target.checked);
+  });
+
+  $("#onboardingOpenConsole")?.addEventListener("change", (event) => {
+    writeBooleanSetting(LAUNCHER_SETTING_KEYS.openConsoleOnLaunch, event.target.checked);
+  });
+
+  $("#reopenOnboardingBtn")?.addEventListener("click", openOnboarding);
+
+  document.addEventListener("keydown", (event) => {
+    const backdrop = $("#onboardingBackdrop");
+    if (!backdrop || backdrop.classList.contains("hidden")) return;
+
+    if (event.key === "Escape") {
+      closeOnboarding();
+    }
+  });
+}
+
 async function boot() {
   await loadSystemMemoryInfo();
   await initEvents();
   await loadAccount();
   await loadProfiles();
+
+  initHomeWidgets();
+  initDataFolderSetting();
+  initDeveloperScreen();
+  initOnboardingEvents();
+
+  if (!isOnboardingComplete()) {
+    openOnboarding();
+  }
+
   await loadDiscordStatus();
   await loadEditorVersionData();
 
   loadJavaInstallations();
 
-  await loadServerStatuses();
+  try {
+    syncConsoleInstances(await window.launcherAPI.launcher.listInstances());
+  } catch {
+    renderConsoleInstanceSelect();
+  }
+
   setInterval(loadServerStatuses, 60000);
   await checkDefaultClientInfoManually();
   setStatus("Ready.");

@@ -1,7 +1,11 @@
+const crypto = require("crypto");
 const { Auth, wrapError } = require("msmc");
 const storage = require("./storage");
 
 const ACCOUNT_FILE = "account.json";
+
+const LICENSE_FILE = "license.json";
+const OFFLINE_NAME_PATTERN = /^[A-Za-z0-9_]{3,16}$/;
 
 let loginInProgress = null;
 
@@ -11,7 +15,7 @@ function safeAccount(account) {
   return {
     username: account.username || account.name || "Unknown",
     uuid: account.uuid || account.id || null,
-    type: account.type || "microsoft",
+    type: account.type === "offline" ? "offline" : "microsoft",
     savedAt: account.savedAt || new Date().toISOString(),
   };
 }
@@ -172,6 +176,7 @@ async function runMicrosoftLogin() {
   const account = normalizeMclcAuth(mclcAuth);
 
   storage.writeJson(ACCOUNT_FILE, account);
+  recordVerifiedOwnership(account);
 
   console.log("[auth] Login saved for:", account.username);
 
@@ -204,6 +209,91 @@ async function loginMicrosoft() {
   return loginInProgress;
 }
 
+function recordVerifiedOwnership(account) {
+  storage.writeJson(LICENSE_FILE, {
+    verifiedAt: new Date().toISOString(),
+    username: account.username,
+    uuid: account.uuid,
+  });
+}
+
+function hasVerifiedOwnership() {
+  const license = storage.readJson(LICENSE_FILE, null);
+  if (license?.verifiedAt) return true;
+
+  const account = storage.readJson(ACCOUNT_FILE, null);
+
+  if (account && account.type !== "offline" && account.access_token && account.uuid) {
+    recordVerifiedOwnership(account);
+    return true;
+  }
+
+  return false;
+}
+
+function offlineUuid(username) {
+  const hash = crypto.createHash("md5").update(`OfflinePlayer:${username}`, "utf8").digest();
+
+  hash[6] = (hash[6] & 0x0f) | 0x30;
+  hash[8] = (hash[8] & 0x3f) | 0x80;
+
+  const hex = hash.toString("hex");
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+}
+
+function getOfflineEligibility() {
+  const license = storage.readJson(LICENSE_FILE, null);
+
+  return {
+    allowed: hasVerifiedOwnership(),
+    verifiedUsername: license?.username || null,
+  };
+}
+
+async function loginOffline(username) {
+  const name = String(username || "").trim();
+
+  if (!hasVerifiedOwnership()) {
+    return {
+      ok: false,
+      error:
+        "Offline accounts unlock after you sign in once with a Microsoft account that owns Minecraft: Java Edition.",
+    };
+  }
+
+  if (!OFFLINE_NAME_PATTERN.test(name)) {
+    return {
+      ok: false,
+      error: "Use 3-16 characters: letters, numbers and underscores only.",
+    };
+  }
+
+  const uuid = offlineUuid(name);
+
+  const account = {
+    type: "offline",
+    username: name,
+    name,
+    uuid,
+    access_token: uuid,
+    accessToken: uuid,
+    client_token: uuid,
+    clientToken: uuid,
+    user_properties: {},
+    meta: { type: "mojang" },
+    savedAt: new Date().toISOString(),
+  };
+
+  storage.writeJson(ACCOUNT_FILE, account);
+
+  console.log("[auth] Offline account saved for:", name);
+
+  return {
+    ok: true,
+    account: safeAccount(account),
+  };
+}
+
 async function getAccount() {
   const account = storage.readJson(ACCOUNT_FILE, null);
   return safeAccount(account);
@@ -215,6 +305,13 @@ function getStoredAccount() {
 
 function getMinecraftAccessToken() {
   const account = storage.readJson(ACCOUNT_FILE, null);
+
+  if (account?.type === "offline") {
+    throw new Error(
+      "Offline accounts can't use skins or capes. Please login with Microsoft first."
+    );
+  }
+
   const token = account?.access_token || account?.accessToken || "";
 
   if (!token) {
@@ -272,7 +369,7 @@ function getLaunchAuth() {
     uuid: account.uuid,
     name: account.username,
     user_properties: account.user_properties || {},
-    meta: account.meta || { type: "msa" },
+    meta: account.meta || { type: account.type === "offline" ? "mojang" : "msa" },
   };
 }
 
@@ -286,6 +383,8 @@ async function logout() {
 
 module.exports = {
   loginMicrosoft,
+  loginOffline,
+  getOfflineEligibility,
   getAccount,
   getStoredAccount,
   getMinecraftAccessToken,

@@ -8,8 +8,10 @@ const authService = require("./auth");
 const profileService = require("./profiles");
 const storage = require("./storage");
 
-let launcher = null;
-let gameProcess = null;
+const instances = new Map();
+const instanceListeners = new Set();
+let nextInstanceNumber = 1;
+let preparationQueue = Promise.resolve();
 
 const PROGRESS_PERCENT_STEP = 10;
 const DOWNLOAD_LOG_INTERVAL_MS = 1500;
@@ -1017,7 +1019,7 @@ function sanitizeLauncherLog(line) {
   return text;
 }
 
-function createProgressLogger(window) {
+function createProgressLogger(log) {
   const lastBucketByType = new Map();
 
   return (progress) => {
@@ -1035,7 +1037,7 @@ function createProgressLogger(window) {
       }
 
       lastBucketByType.set(type, bucket);
-      sendGameLog(window, `[progress] ${JSON.stringify(progress)}`);
+      log(`[progress] ${JSON.stringify(progress)}`);
       return;
     }
 
@@ -1046,11 +1048,11 @@ function createProgressLogger(window) {
     }
 
     lastBucketByType.set(type, task);
-    sendGameLog(window, `[progress] ${JSON.stringify(progress)}`);
+    log(`[progress] ${JSON.stringify(progress)}`);
   };
 }
 
-function createDownloadLogger(window) {
+function createDownloadLogger(log) {
   let count = 0;
   let lastLog = 0;
   let lastName = "";
@@ -1067,176 +1069,294 @@ function createDownloadLogger(window) {
 
     lastLog = now;
 
-    sendGameLog(window, `[download] ${count} file(s) checked/downloaded. Latest: ${lastName}`);
+    log(`[download] ${count} file(s) checked/downloaded. Latest: ${lastName}`);
   };
 }
 
-function isRunning() {
-  return Boolean(gameProcess);
+function sendInstanceLog(window, instance, message) {
+  if (!window || window.isDestroyed()) return;
+
+  window.webContents.send("instance:log", {
+    instanceId: instance.instanceId,
+    line: String(message ?? ""),
+  });
+}
+
+function publicInstance(instance) {
+  return {
+    instanceId: instance.instanceId,
+    number: instance.number,
+    profileId: instance.profileId,
+    profileName: instance.profileName,
+    minecraftVersion: instance.minecraftVersion,
+    versionId: instance.versionId,
+    status: instance.status,
+    pid: instance.child?.pid || null,
+    startedAt: instance.startedAt,
+  };
+}
+
+function listInstances() {
+  return Array.from(instances.values()).map(publicInstance);
+}
+
+function notifyInstancesChanged(window) {
+  const list = listInstances();
+
+  if (window && !window.isDestroyed()) {
+    window.webContents.send("launcher:instances", list);
+  }
+
+  for (const listener of instanceListeners) {
+    try {
+      listener(list);
+    } catch (error) {
+      console.warn("[launcher] Instance listener failed:", error.message || error);
+    }
+  }
+}
+
+function onInstancesChanged(listener) {
+  instanceListeners.add(listener);
+  return () => instanceListeners.delete(listener);
+}
+
+function isRunning(profileId = null) {
+  if (!profileId) return instances.size > 0;
+
+  return Array.from(instances.values()).some((instance) => instance.profileId === profileId);
+}
+
+function runPrepared(task) {
+  const run = preparationQueue.then(task, task);
+  preparationQueue = run.catch(() => {});
+  return run;
 }
 
 async function launch(profileId, window) {
-  if (gameProcess) {
-    throw new Error("Minecraft is already running.");
-  }
-
   const launchStartTime = Date.now();
 
   const profile = await profileService.getProfileById(profileId);
   const authorization = authService.getLaunchAuth();
 
-  storage.ensureProfileRuntimeDirs(profile.gameDir);
-  storage.ensureRuntimeDirs();
-
-  const installedCustomVersionId = installCustomVersionJson(profile);
-  const customVersionId = getCustomVersionId(profile, installedCustomVersionId);
-
-  await seedSharedRuntimeCaches(profile, customVersionId, window);
-
-  const runtimeRoot = storage.getRuntimeRootDir();
-  const profileRoot = profile.gameDir;
-  const versionOptions = buildVersionOptions(profile, customVersionId);
-
-  launcher = new Client();
-
-  let launchFailedMessage = "";
-  const logProgress = createProgressLogger(window);
-  const logDownload = createDownloadLogger(window);
-
-  launcher.on("debug", (line) => {
-    const text = sanitizeLauncherLog(line);
-    sendGameLog(window, `[debug] ${text}`);
-
-    if (text.includes("Failed to start")) {
-      launchFailedMessage = text;
-      gameProcess = null;
-    }
-  });
-
-  launcher.on("data", (line) => {
-    sendGameLog(window, String(line));
-  });
-
-  launcher.on("progress", (progress) => {
-    logProgress(progress);
-  });
-
-  launcher.on("download", (download) => {
-    const text = String(download || "");
-
-    if (/^[a-f0-9]{40}$/i.test(text)) {
-      return;
-    }
-
-    logDownload(download);
-  });
-
-  launcher.on("close", (code) => {
-    sendGameLog(window, `[close] Minecraft exited with code ${code}`);
-    sendGameClose(window, code);
-    gameProcess = null;
-  });
-
-  const options = {
-    authorization,
-
-    root: runtimeRoot,
-
-    version: versionOptions,
-
-    memory: {
-      min: profile.minMemory || "2G",
-      max: profile.maxMemory || "4G",
-    },
-
-    window: {
-      width: Number(profile.width || 854),
-      height: Number(profile.height || 480),
-      fullscreen: Boolean(profile.fullscreen),
-    },
-
-    overrides: {
-      gameDirectory: profileRoot,
-    },
+  const instance = {
+    instanceId: `${Date.now().toString(36)}-${nextInstanceNumber}`,
+    number: nextInstanceNumber,
+    profileId: profile.id,
+    profileName: profile.name,
+    minecraftVersion: profile.minecraftVersion,
+    versionId: profile.customVersionId || profile.minecraftVersion,
+    status: "preparing",
+    startedAt: launchStartTime,
+    child: null,
+    killRequested: false,
   };
 
-  if (profile.javaPath) {
-    options.javaPath = profile.javaPath;
+  nextInstanceNumber += 1;
+  instances.set(instance.instanceId, instance);
+  notifyInstancesChanged(window);
+
+  const log = (message) => sendInstanceLog(window, instance, message);
+
+  const removeInstance = (code) => {
+    if (!instances.has(instance.instanceId)) return;
+
+    instances.delete(instance.instanceId);
+
+    if (window && !window.isDestroyed()) {
+      window.webContents.send("game:close", {
+        instanceId: instance.instanceId,
+        profileId: instance.profileId,
+        profileName: instance.profileName,
+        code,
+      });
+    }
+
+    notifyInstancesChanged(window);
+  };
+
+  const otherRunning = instances.size - 1;
+
+  if (otherRunning > 0) {
+    log(
+      `[launcher] ${otherRunning} other instance(s) running. Waiting for shared files to be ready...`
+    );
   }
-
-  const jvmArgs = splitArgs(profile.extraJvmArgs);
-  const mcArgs = splitArgs(profile.extraMcArgs);
-
-  if (jvmArgs.length > 0) {
-    options.jvmArgs = jvmArgs;
-  }
-
-  if (mcArgs.length > 0) {
-    options.customArgs = mcArgs;
-  }
-
-  sendGameLog(window, `Launching profile: ${profile.name}`);
-  sendGameLog(window, `Minecraft version: ${profile.minecraftVersion}`);
-  sendGameLog(window, `Custom version ID: ${customVersionId || "none"}`);
-  sendGameLog(window, `Shared runtime root: ${runtimeRoot}`);
-  sendGameLog(window, `Shared assets folder: ${path.join(runtimeRoot, "assets")}`);
-  sendGameLog(window, `Shared libraries folder: ${path.join(runtimeRoot, "libraries")}`);
-  sendGameLog(window, `Shared cache folder: ${path.join(runtimeRoot, "cache")}`);
-  sendGameLog(window, `Shared versions folder: ${path.join(runtimeRoot, "versions")}`);
-  sendGameLog(window, `Profile game directory: ${profileRoot}`);
-  sendGameLog(window, `Profile config folder: ${path.join(profileRoot, "config")}`);
-  sendGameLog(window, `Profile logs folder: ${path.join(profileRoot, "logs")}`);
-  sendGameLog(window, `Profile mods folder: ${path.join(profileRoot, "mods")}`);
-  sendGameLog(window, `Loader type: ${profile.loaderType}`);
-  sendGameLog(window, `Launch version options: ${JSON.stringify(versionOptions)}`);
 
   try {
-    const child = await launcher.launch(options);
+    const result = await runPrepared(async () => {
+      if (instance.killRequested) {
+        throw new Error("Launch was cancelled.");
+      }
 
-    sendGameLog(
-      window,
-      `[timer] launcher.launch() returned after ${Math.round((Date.now() - launchStartTime) / 1000)}s`
-    );
+      storage.ensureProfileRuntimeDirs(profile.gameDir);
+      storage.ensureRuntimeDirs();
 
-    if (launchFailedMessage) {
-      throw new Error(launchFailedMessage);
+      const installedCustomVersionId = installCustomVersionJson(profile);
+      const customVersionId = getCustomVersionId(profile, installedCustomVersionId);
+
+      instance.versionId = customVersionId || profile.minecraftVersion;
+
+      await seedSharedRuntimeCaches(profile, customVersionId, window);
+
+      const runtimeRoot = storage.getRuntimeRootDir();
+      const profileRoot = profile.gameDir;
+      const versionOptions = buildVersionOptions(profile, customVersionId);
+
+      const client = new Client();
+
+      let launchFailedMessage = "";
+      const logProgress = createProgressLogger(log);
+      const logDownload = createDownloadLogger(log);
+
+      client.on("debug", (line) => {
+        const text = sanitizeLauncherLog(line);
+        log(`[debug] ${text}`);
+
+        if (text.includes("Failed to start")) {
+          launchFailedMessage = text;
+        }
+      });
+
+      client.on("data", (line) => {
+        log(String(line));
+      });
+
+      client.on("progress", (progress) => {
+        logProgress(progress);
+      });
+
+      client.on("download", (download) => {
+        const text = String(download || "");
+
+        if (/^[a-f0-9]{40}$/i.test(text)) {
+          return;
+        }
+
+        logDownload(download);
+      });
+
+      client.on("close", (code) => {
+        log(`[close] Minecraft exited with code ${code}`);
+        removeInstance(code);
+      });
+
+      const options = {
+        authorization,
+
+        root: runtimeRoot,
+
+        version: versionOptions,
+
+        memory: {
+          min: profile.minMemory || "2G",
+          max: profile.maxMemory || "4G",
+        },
+
+        window: {
+          width: Number(profile.width || 854),
+          height: Number(profile.height || 480),
+          fullscreen: Boolean(profile.fullscreen),
+        },
+
+        overrides: {
+          gameDirectory: profileRoot,
+        },
+      };
+
+      if (profile.javaPath) {
+        options.javaPath = profile.javaPath;
+      }
+
+      const jvmArgs = splitArgs(profile.extraJvmArgs);
+      const mcArgs = splitArgs(profile.extraMcArgs);
+
+      if (jvmArgs.length > 0) {
+        options.jvmArgs = jvmArgs;
+      }
+
+      if (mcArgs.length > 0) {
+        options.customArgs = mcArgs;
+      }
+
+      log(`Launching profile: ${profile.name} (instance #${instance.number})`);
+      log(`Minecraft version: ${profile.minecraftVersion}`);
+      log(`Custom version ID: ${customVersionId || "none"}`);
+      log(`Shared runtime root: ${runtimeRoot}`);
+      log(`Profile game directory: ${profileRoot}`);
+      log(`Loader type: ${profile.loaderType}`);
+      log(`Launch version options: ${JSON.stringify(versionOptions)}`);
+
+      const child = await client.launch(options);
+
+      log(
+        `[timer] launcher.launch() returned after ${Math.round((Date.now() - launchStartTime) / 1000)}s`
+      );
+
+      if (launchFailedMessage) {
+        throw new Error(launchFailedMessage);
+      }
+
+      if (!child) {
+        throw new Error("Minecraft failed to start. No game process was returned.");
+      }
+
+      return { child, customVersionId };
+    });
+
+    instance.child = result.child;
+    instance.status = "running";
+
+    if (instance.killRequested) {
+      result.child.kill();
     }
 
-    if (!child) {
-      throw new Error("Minecraft failed to start. No game process was returned.");
-    }
-
-    gameProcess = child;
+    notifyInstancesChanged(window);
 
     return {
       ok: true,
+      instanceId: instance.instanceId,
+      instanceNumber: instance.number,
+      profileId: profile.id,
       profileName: profile.name,
       minecraftVersion: profile.minecraftVersion,
-      customVersionId,
-      versionId: customVersionId || profile.minecraftVersion,
+      customVersionId: result.customVersionId,
+      versionId: instance.versionId,
     };
   } catch (error) {
-    gameProcess = null;
-
     const message = error.message || String(error);
-    sendGameLog(window, `[launcher error] ${message}`);
+    log(`[launcher error] ${message}`);
+
+    removeInstance(-1);
 
     throw error;
   }
 }
 
-async function kill() {
-  if (gameProcess && typeof gameProcess.kill === "function") {
-    gameProcess.kill();
-    gameProcess = null;
-    return { ok: true };
+async function kill(instanceId = null) {
+  const targets = instanceId
+    ? [instances.get(instanceId)].filter(Boolean)
+    : Array.from(instances.values());
+
+  if (targets.length === 0) {
+    return { ok: false, killed: 0 };
   }
 
-  return { ok: false };
+  for (const instance of targets) {
+    instance.killRequested = true;
+
+    if (instance.child && typeof instance.child.kill === "function") {
+      instance.child.kill();
+    }
+  }
+
+  return { ok: true, killed: targets.length };
 }
 
 module.exports = {
   launch,
   isRunning,
+  listInstances,
+  onInstancesChanged,
   kill,
 };

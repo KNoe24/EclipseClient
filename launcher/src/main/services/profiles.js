@@ -186,8 +186,31 @@ function normalizeProfilesData(data) {
   };
 }
 
+const PROFILE_PATH_FIELDS = ["gameDir", "javaPath", "customVersionJsonPath", "iconPath"];
+
+function mapProfilePaths(profile, mapper) {
+  const mapped = { ...profile };
+
+  for (const field of PROFILE_PATH_FIELDS) {
+    if (mapped[field]) mapped[field] = mapper(mapped[field]);
+  }
+
+  return mapped;
+}
+
 function readProfilesFile() {
-  return normalizeProfilesData(storage.readJson(PROFILES_FILE, defaultProfilesFile()));
+  const raw = storage.readJson(PROFILES_FILE, null);
+
+  if (!raw) {
+    return normalizeProfilesData(writeProfilesFile(defaultProfilesFile()));
+  }
+
+  return normalizeProfilesData({
+    ...raw,
+    profiles: Array.isArray(raw.profiles)
+      ? raw.profiles.map((profile) => mapProfilePaths(profile, storage.fromStoredPath))
+      : raw.profiles,
+  });
 }
 
 function writeProfilesFile(data) {
@@ -199,7 +222,12 @@ function writeProfilesFile(data) {
     }
   }
 
-  return storage.writeJson(PROFILES_FILE, normalized);
+  storage.writeJson(PROFILES_FILE, {
+    ...normalized,
+    profiles: normalized.profiles.map((profile) => mapProfilePaths(profile, storage.toStoredPath)),
+  });
+
+  return normalized;
 }
 
 function iconDataUrlFor(iconPath) {

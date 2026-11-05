@@ -59,7 +59,7 @@
 
           <button class="nav-btn mcbtn" data-page="settings">
             <img class="nav-icon" src="./static/img/settings.svg" alt="" />
-            <span>Settings +WIP+</span>
+            <span>Settings</span>
           </button>
         </nav>
 
@@ -103,57 +103,27 @@
         </section>
 
         <section id="home-tab-home" class="home-subpage active" data-home-page="home">
-          <section class="mcsection home-th-servers midtext">
-            <table>
-              <tr>
-                <th class="whitetext mct">Name</th>
-                <th class="whitetext mct">Ip</th>
-                <th class="whitetext mct">Players</th>
-              </tr>
+          <div id="homeWidgetBoard" class="home-widget-board" aria-live="polite"></div>
 
-              <tr>
-                <td class="whitetext mcr">McPvP</td>
-                <td class="whitetext mcr">mcpvp.club</td>
-                <td>
-                  <span id="server:mcpvp.club" class="server-status-text mcr">Loading...</span>
-                </td>
-              </tr>
+          <aside
+            id="homeCustomizePanel"
+            class="home-customize-panel mcsection hidden"
+            aria-label="Customize home"
+          >
+            <div class="home-customize-head">
+              <p class="mct whitetext">Home widgets</p>
+              <p class="mcr home-customize-sub">
+                Toggle widgets, drag to reorder, or open the gear for options.
+              </p>
+            </div>
 
-              <tr>
-                <td class="whitetext mcr">Starlight</td>
-                <td class="whitetext mcr">mc.wawe.cc</td>
-                <td>
-                  <span id="server:mc.wawe.cc" class="server-status-text mcr">Loading...</span>
-                </td>
-              </tr>
+            <div id="homeWidgetList" class="home-widget-list"></div>
 
-              <tr>
-                <td class="whitetext mcr">Hypixel</td>
-                <td class="whitetext mcr">hypixel.net</td>
-                <td>
-                  <span id="server:hypixel.net" class="server-status-text mcr">Loading...</span>
-                </td>
-              </tr>
-
-              <tr>
-                <td class="whitetext mcr">Hoplite</td>
-                <td class="whitetext mcr">hoplite.gg</td>
-                <td>
-                  <span id="server:hoplite.gg" class="server-status-text mcr">Loading...</span>
-                </td>
-              </tr>
-
-              <tr>
-                <td class="whitetext mcr">DonutSMP</td>
-                <td class="whitetext mcr">donutsmp.com</td>
-                <td>
-                  <span id="server:donutsmp.com" class="server-status-text mcr">Loading...</span>
-                </td>
-              </tr>
-            </table>
-          </section>
-
-          <section class="mcsection home-th-friends"></section>
+            <div class="home-customize-footer">
+              <button id="homeWidgetsResetBtn" class="mcbtn mcr" type="button">Reset</button>
+              <button id="homeCustomizeDoneBtn" class="mcbtn mcr green" type="button">Done</button>
+            </div>
+          </aside>
 
           <section class="mcsection home-start-bar">
             <div id="profileDropup" class="profile-dropup">
@@ -196,10 +166,24 @@
           <div class="console-header">
             <div class="console-title-block">
               <h2 class="mct whitetext shadow">Console</h2>
-              <p class="whitetext mcr">Launcher, updater, and game logs appear here.</p>
+              <p class="whitetext mcr">Pick an instance to see its game output.</p>
             </div>
 
-            <button id="clearConsoleBtn" class="mcbtn mcr">Clear</button>
+            <div class="console-controls">
+              <label class="console-instance-picker">
+                <span class="console-instance-label whitetext mcr">Showing</span>
+                <select id="consoleInstanceSelect" class="console-instance-select mcr">
+                  <option value="all">All logs</option>
+                  <option value="launcher">Launcher</option>
+                </select>
+              </label>
+
+              <button id="consoleStopInstanceBtn" class="mcbtn mcr danger hidden" type="button">
+                Stop all
+              </button>
+
+              <button id="clearConsoleBtn" class="mcbtn mcr" type="button">Clear</button>
+            </div>
           </div>
 
           <pre id="consoleOutput" class="console shadow"></pre>
@@ -263,8 +247,8 @@
       <section id="page-settings" class="page">
         <div class="settings-header">
           <div class="settings-title-block">
-            <h2 class="mct whitetext shadow">Profile Settings</h2>
-            <p class="whitetext mcr">Edit settings for the currently selected installation.</p>
+            <h2 class="mct whitetext shadow">Settings</h2>
+            <p class="whitetext mcr">Launcher and game preferences. Click a row to toggle it.</p>
           </div>
           <button id="saveSettingsBtn" class="primary mcbtn mcr">Save Settings</button>
         </div>
@@ -272,7 +256,7 @@
         <div class="settings-content midtext">
           <p class="whitetext mct">Launcher Settings</p>
 
-          <div class="settings-row">
+          <label class="settings-row settings-row-toggle">
             <div>
               <p class="settings-row-title whitetext mct">
                 Don&apos;t Close Launcher When Launched
@@ -282,15 +266,15 @@
               </p>
             </div>
 
-            <label class="block-switch">
+            <span class="block-switch">
               <input id="settingKeepLauncherOpenOnLaunch" type="checkbox" checked />
               <span class="block-switch-track">
                 <span class="block-switch-knob"></span>
               </span>
-            </label>
-          </div>
+            </span>
+          </label>
 
-          <div class="settings-row">
+          <label class="settings-row settings-row-toggle">
             <div>
               <p class="settings-row-title whitetext mct">Open Console On Launch</p>
               <p class="settings-row-desc whitetext mcr">
@@ -298,34 +282,188 @@
               </p>
             </div>
 
-            <label class="block-switch">
+            <span class="block-switch">
               <input id="settingOpenConsoleOnLaunch" type="checkbox" />
               <span class="block-switch-track">
                 <span class="block-switch-knob"></span>
               </span>
-            </label>
-          </div>
+            </span>
+          </label>
 
-          <p class="whitetext mct">Minecraft: Java edition Settings</p>
           <div class="settings-row">
             <div>
-              <p class="settings-row-title whitetext mct">SMP mode</p>
+              <p class="settings-row-title whitetext mct">Home Widgets</p>
               <p class="settings-row-desc whitetext mcr">
-                Adds certain mods that helps smps. [Only works if your selected instalation is
-                fabric]
+                Choose which widgets show on Home, change their options and reorder them.
               </p>
             </div>
 
-            <label class="block-switch">
+            <button id="homeCustomizeBtn" class="mcbtn mcr settings-row-btn" type="button">
+              Customize
+            </button>
+          </div>
+
+          <div class="settings-row">
+            <div>
+              <p class="settings-row-title whitetext mct">
+                Data Folder
+                <span id="settingsPortableBadge" class="portable-badge mcr hidden">Portable</span>
+              </p>
+              <p class="settings-row-desc whitetext mcr">
+                <span id="settingsDataDir">Loading...</span><br />
+                To run portable, put an empty <code>portable.txt</code> next to the launcher, or use
+                the portable build.
+              </p>
+            </div>
+
+            <button id="openDataFolderBtn" class="mcbtn mcr settings-row-btn" type="button">
+              Open folder
+            </button>
+          </div>
+
+          <div class="settings-row">
+            <div>
+              <p class="settings-row-title whitetext mct">Welcome Setup</p>
+              <p class="settings-row-desc whitetext mcr">
+                Run the first-start setup again: sign in, pick an installation, launcher behaviour.
+              </p>
+            </div>
+
+            <button id="reopenOnboardingBtn" class="mcbtn mcr settings-row-btn" type="button">
+              Open setup
+            </button>
+          </div>
+
+          <p class="whitetext mct">Minecraft: Java Edition Settings</p>
+          <label class="settings-row settings-row-toggle">
+            <div>
+              <p class="settings-row-title whitetext mct">SMP mode</p>
+              <p class="settings-row-desc whitetext mcr">
+                Adds mods that help SMP servers. Only works if the selected installation uses
+                Fabric.
+              </p>
+            </div>
+
+            <span class="block-switch">
               <input id="settingEnableSmpMode" type="checkbox" />
               <span class="block-switch-track">
                 <span class="block-switch-knob"></span>
               </span>
-            </label>
+            </span>
+          </label>
+        </div>
+      </section>
+
+      <section id="page-developer" class="page">
+        <div class="settings-header">
+          <div class="settings-title-block">
+            <h2 class="mct whitetext shadow">Developer</h2>
+            <p class="whitetext mcr">Hidden tools for testing the launcher.</p>
           </div>
-          <p class="whitetext mct">Launcher: Test Settings</p>
+          <button id="closeDeveloperBtn" class="primary mcbtn mcr" type="button">Close</button>
+        </div>
+
+        <div class="settings-content midtext">
+          <div class="dev-warning" role="alert">
+            <p class="dev-warning-title mct">Developer screen</p>
+            <p class="dev-warning-text mcr">
+              These tools are for testing only. Use them with responsibility: they can sign you out,
+              reset your layout, or put the launcher into states regular users never see.
+            </p>
+          </div>
+
+          <p class="whitetext mct">Offline Account</p>
+
+          <div class="settings-row dev-offline-row">
+            <div>
+              <p class="settings-row-title whitetext mct">Offline Login</p>
+              <p id="devOfflineDesc" class="settings-row-desc whitetext mcr">
+                Plays in offline mode with any name: singleplayer, LAN and offline-mode servers
+                only. Replaces the signed-in Microsoft account until you log in again. Skins and
+                online servers need a Microsoft account.
+              </p>
+            </div>
+
+            <div class="dev-offline-form">
+              <input
+                id="devOfflineName"
+                class="settings-text-input"
+                type="text"
+                maxlength="16"
+                placeholder="Player name"
+                autocomplete="off"
+                spellcheck="false"
+              />
+              <button id="devOfflineLoginBtn" class="mcbtn mcr settings-row-btn" type="button">
+                Log in
+              </button>
+            </div>
+          </div>
+          <p id="devOfflineStatus" class="dev-status mcr"></p>
+
+          <p class="whitetext mct">Tools</p>
 
           <div class="settings-row">
+            <div>
+              <p class="settings-row-title whitetext mct">Replay Welcome Animation</p>
+              <p class="settings-row-desc whitetext mcr">
+                Plays the login animation for the current account.
+              </p>
+            </div>
+            <button id="devReplayWelcomeBtn" class="mcbtn mcr settings-row-btn" type="button">
+              Play
+            </button>
+          </div>
+
+          <div class="settings-row">
+            <div>
+              <p class="settings-row-title whitetext mct">Reset First-Start Setup</p>
+              <p class="settings-row-desc whitetext mcr">
+                The welcome setup shows again on the next start.
+              </p>
+            </div>
+            <button id="devResetOnboardingBtn" class="mcbtn mcr settings-row-btn" type="button">
+              Reset
+            </button>
+          </div>
+
+          <div class="settings-row">
+            <div>
+              <p class="settings-row-title whitetext mct">Reset Home Widgets</p>
+              <p class="settings-row-desc whitetext mcr">
+                Restores the default widgets, order and options.
+              </p>
+            </div>
+            <button id="devResetWidgetsBtn" class="mcbtn mcr settings-row-btn" type="button">
+              Reset
+            </button>
+          </div>
+
+          <div class="settings-row">
+            <div>
+              <p class="settings-row-title whitetext mct">Reload Launcher UI</p>
+              <p class="settings-row-desc whitetext mcr">
+                Reloads the window. Running games keep running.
+              </p>
+            </div>
+            <button id="devReloadUiBtn" class="mcbtn mcr settings-row-btn" type="button">
+              Reload
+            </button>
+          </div>
+
+          <div class="settings-row">
+            <div>
+              <p class="settings-row-title whitetext mct">Running Instances</p>
+              <p id="devInstancesText" class="settings-row-desc whitetext mcr">None.</p>
+            </div>
+            <button id="devStopAllBtn" class="mcbtn mcr settings-row-btn danger" type="button">
+              Stop all
+            </button>
+          </div>
+
+          <p class="whitetext mct">Test Controls</p>
+
+          <label class="settings-row settings-row-toggle">
             <div>
               <p class="settings-row-title whitetext mct">Test Toggle</p>
               <p class="settings-row-desc whitetext mcr">
@@ -333,13 +471,13 @@
               </p>
             </div>
 
-            <label class="block-switch">
+            <span class="block-switch">
               <input id="testBooleanSwitch" type="checkbox" />
               <span class="block-switch-track">
                 <span class="block-switch-knob"></span>
               </span>
-            </label>
-          </div>
+            </span>
+          </label>
 
           <div class="settings-row">
             <div>
@@ -406,12 +544,12 @@
 
             <label class="editor-checkbox-row">
               <span class="whitetext mcr">Show snapshots</span>
-              <label class="block-switch">
+              <span class="block-switch">
                 <input id="editorShowSnapshots" type="checkbox" />
                 <span class="block-switch-track">
                   <span class="block-switch-knob"></span>
                 </span>
-              </label>
+              </span>
             </label>
 
             <label>
@@ -476,12 +614,12 @@
 
             <label class="editor-checkbox-row">
               <span class="whitetext mcr">Fullscreen</span>
-              <label class="block-switch">
+              <span class="block-switch">
                 <input id="editorSettingFullscreen" type="checkbox" />
                 <span class="block-switch-track">
                   <span class="block-switch-knob"></span>
                 </span>
-              </label>
+              </span>
             </label>
 
             <label>
@@ -638,6 +776,436 @@
         </div>
       </div>
     </div>
+
+    <template id="widgetShellTemplate">
+      <article class="home-widget mcsection">
+        <header class="home-widget-head">
+          <span class="home-widget-grip" aria-hidden="true">⋮⋮</span>
+          <span class="home-widget-title mct whitetext"></span>
+          <span class="home-widget-tools">
+            <button
+              class="home-widget-tool"
+              data-widget-action="settings"
+              type="button"
+              title="Widget options"
+            >
+              <img src="./static/img/settings.svg" alt="Options" />
+            </button>
+            <button
+              class="home-widget-tool"
+              data-widget-action="hide"
+              type="button"
+              title="Hide widget"
+            >
+              ×
+            </button>
+          </span>
+        </header>
+        <div class="home-widget-body"></div>
+      </article>
+    </template>
+
+    <template id="widgetListRowTemplate">
+      <div class="home-widget-row" draggable="true">
+        <div class="home-widget-row-main">
+          <span class="home-widget-grip" aria-hidden="true">⋮⋮</span>
+          <span class="home-widget-row-name mct whitetext"></span>
+          <span class="home-widget-row-arrows">
+            <button class="home-widget-tool" data-row-action="up" type="button" title="Move up">
+              ▲
+            </button>
+            <button class="home-widget-tool" data-row-action="down" type="button" title="Move down">
+              ▼
+            </button>
+          </span>
+          <button class="home-widget-tool" data-row-action="settings" type="button" title="Options">
+            <img src="./static/img/settings.svg" alt="Options" />
+          </button>
+          <label class="block-switch home-widget-row-switch" title="Show on home">
+            <input type="checkbox" data-row-action="toggle" />
+            <span class="block-switch-track">
+              <span class="block-switch-knob"></span>
+            </span>
+          </label>
+        </div>
+        <div class="home-widget-row-settings hidden"></div>
+      </div>
+    </template>
+
+    <template id="widget-tpl-servers">
+      <div class="widget-servers">
+        <table class="widget-servers-table">
+          <thead>
+            <tr>
+              <th class="mct whitetext">Name</th>
+              <th class="mct whitetext">IP</th>
+              <th class="mct whitetext">Players</th>
+            </tr>
+          </thead>
+          <tbody data-slot="rows"></tbody>
+        </table>
+        <p class="widget-empty mcr hidden" data-slot="empty">
+          No servers yet. Add some in Customize.
+        </p>
+      </div>
+    </template>
+
+    <template id="widget-row-tpl-servers">
+      <tr>
+        <td class="whitetext mcr widget-server-name">
+          <img class="widget-server-icon hidden" data-slot="icon" alt="" />
+          <span data-slot="name"></span>
+        </td>
+        <td class="mcr widget-server-ip" data-slot="ip"></td>
+        <td><span class="server-status-text mcr" data-slot="players">…</span></td>
+      </tr>
+    </template>
+
+    <template id="widget-settings-tpl-servers">
+      <div class="widget-settings">
+        <div class="widget-server-editor" data-slot="serverEditor"></div>
+        <button class="mcbtn mcr widget-settings-btn" data-action="add-server" type="button">
+          Add server
+        </button>
+      </div>
+    </template>
+
+    <template id="widget-server-editor-row-tpl">
+      <div class="widget-server-editor-row">
+        <input class="editor-input" data-field="name" placeholder="Name" maxlength="32" />
+        <input class="editor-input" data-field="ip" placeholder="play.example.com" maxlength="80" />
+        <button class="home-widget-tool" data-action="remove-server" type="button" title="Remove">
+          ×
+        </button>
+      </div>
+    </template>
+
+    <template id="widget-tpl-players">
+      <div class="widget-players">
+        <img class="widget-players-icon hidden" data-slot="icon" alt="" />
+        <p class="widget-big-number mct whitetext" data-slot="count">…</p>
+        <p class="widget-players-max mcr" data-slot="max"></p>
+        <p class="widget-players-label mcr whitetext" data-slot="label"></p>
+        <p class="widget-players-motd mcr" data-slot="motd"></p>
+      </div>
+    </template>
+
+    <template id="widget-settings-tpl-players">
+      <div class="widget-settings">
+        <label class="widget-field">
+          <span class="mcr">Server IP</span>
+          <input class="editor-input" data-setting="ip" maxlength="80" placeholder="hypixel.net" />
+        </label>
+        <label class="widget-field">
+          <span class="mcr">Label</span>
+          <input class="editor-input" data-setting="label" maxlength="32" placeholder="Hypixel" />
+        </label>
+        <label class="widget-check">
+          <input type="checkbox" data-setting="showMotd" />
+          <span class="mcr">Show server message (MOTD)</span>
+        </label>
+      </div>
+    </template>
+
+    <template id="widget-tpl-time">
+      <div class="widget-time">
+        <p class="widget-big-number mct whitetext" data-slot="time"></p>
+        <p class="widget-time-date mcr" data-slot="date"></p>
+      </div>
+    </template>
+
+    <template id="widget-settings-tpl-time">
+      <div class="widget-settings">
+        <label class="widget-check">
+          <input type="checkbox" data-setting="use24h" />
+          <span class="mcr">24-hour clock</span>
+        </label>
+        <label class="widget-check">
+          <input type="checkbox" data-setting="showSeconds" />
+          <span class="mcr">Show seconds</span>
+        </label>
+        <label class="widget-check">
+          <input type="checkbox" data-setting="showDate" />
+          <span class="mcr">Show date</span>
+        </label>
+      </div>
+    </template>
+
+    <template id="widget-tpl-quickstart">
+      <div class="widget-quickstart">
+        <div class="widget-quickstart-list" data-slot="list"></div>
+        <p class="widget-empty mcr hidden" data-slot="empty">Pick installations in Customize.</p>
+      </div>
+    </template>
+
+    <template id="widget-row-tpl-quickstart">
+      <button class="widget-quickstart-item" type="button">
+        <span data-slot="icon"></span>
+        <span class="widget-quickstart-text">
+          <span class="widget-quickstart-name mct whitetext" data-slot="name"></span>
+          <span class="widget-quickstart-sub mcr" data-slot="sub"></span>
+        </span>
+        <span class="widget-quickstart-go mct" data-slot="go">Start</span>
+      </button>
+    </template>
+
+    <template id="widget-settings-tpl-quickstart">
+      <div class="widget-settings">
+        <p class="mcr widget-settings-hint">Installations to show (up to 6):</p>
+        <div class="widget-check-list" data-slot="profileChecks"></div>
+      </div>
+    </template>
+
+    <template id="widget-tpl-mcupdate">
+      <div class="widget-mcupdate">
+        <div class="widget-mcupdate-row">
+          <span class="mcr widget-muted">Latest release</span>
+          <span class="mct whitetext widget-mcupdate-version" data-slot="release">…</span>
+          <span class="widget-new-badge mcr hidden" data-slot="releaseNew">New</span>
+        </div>
+        <p class="mcr widget-muted widget-small" data-slot="releaseDate"></p>
+        <div class="widget-mcupdate-row" data-slot="snapshotRow">
+          <span class="mcr widget-muted">Latest snapshot</span>
+          <span class="mct whitetext widget-mcupdate-version" data-slot="snapshot">…</span>
+        </div>
+        <button class="mcbtn mcr widget-action-btn" data-action="mc-news" type="button">
+          Read the news
+        </button>
+      </div>
+    </template>
+
+    <template id="widget-settings-tpl-mcupdate">
+      <div class="widget-settings">
+        <label class="widget-check">
+          <input type="checkbox" data-setting="showSnapshot" />
+          <span class="mcr">Show latest snapshot</span>
+        </label>
+      </div>
+    </template>
+
+    <template id="widget-tpl-launcherupdate">
+      <div class="widget-launcherupdate">
+        <div class="widget-mcupdate-row">
+          <span class="mcr widget-muted">Launcher</span>
+          <span class="mct whitetext" data-slot="launcherVersion">…</span>
+        </div>
+        <p class="mcr widget-small" data-slot="launcherStatus"></p>
+        <div class="widget-mcupdate-row">
+          <span class="mcr widget-muted">Eclipse client</span>
+          <span class="mct whitetext" data-slot="clientVersion">…</span>
+        </div>
+        <p class="mcr widget-small" data-slot="clientStatus"></p>
+        <div class="widget-button-row">
+          <button class="mcbtn mcr widget-action-btn" data-action="check-updates" type="button">
+            Check
+          </button>
+          <button
+            class="mcbtn mcr widget-action-btn green hidden"
+            data-action="install-update"
+            type="button"
+          >
+            Restart &amp; update
+          </button>
+        </div>
+      </div>
+    </template>
+
+    <template id="widget-tpl-console">
+      <pre class="widget-console" data-slot="output" title="Open console"></pre>
+    </template>
+
+    <template id="widget-settings-tpl-console">
+      <div class="widget-settings">
+        <label class="widget-field">
+          <span class="mcr">Lines</span>
+          <input type="range" class="settings-slider" min="3" max="20" data-setting="lines" />
+        </label>
+        <label class="widget-field">
+          <span class="mcr">Source</span>
+          <select class="editor-input" data-setting="source">
+            <option value="all">All logs</option>
+            <option value="launcher">Launcher only</option>
+            <option value="latest">Latest game instance</option>
+          </select>
+        </label>
+      </div>
+    </template>
+
+    <template id="widget-tpl-skin">
+      <div class="widget-skin">
+        <canvas class="widget-skin-canvas" data-slot="canvas"></canvas>
+        <p class="widget-skin-name mct whitetext" data-slot="name"></p>
+      </div>
+    </template>
+
+    <template id="widget-settings-tpl-skin">
+      <div class="widget-settings">
+        <label class="widget-field">
+          <span class="mcr">Animation</span>
+          <select class="editor-input" data-setting="animation">
+            <option value="idle">Idle</option>
+            <option value="walk">Walk</option>
+            <option value="run">Run</option>
+            <option value="wave">Wave</option>
+            <option value="fly">Fly</option>
+            <option value="none">None</option>
+          </select>
+        </label>
+        <label class="widget-check">
+          <input type="checkbox" data-setting="autoRotate" />
+          <span class="mcr">Spin automatically</span>
+        </label>
+        <label class="widget-check">
+          <input type="checkbox" data-setting="showCape" />
+          <span class="mcr">Show cape</span>
+        </label>
+        <label class="widget-check">
+          <input type="checkbox" data-setting="showName" />
+          <span class="mcr">Show player name</span>
+        </label>
+      </div>
+    </template>
+
+    <div id="welcomeOverlay" class="welcome-overlay hidden" aria-live="polite">
+      <div class="welcome-card">
+        <img
+          id="welcomeHead"
+          class="welcome-head"
+          src="./static/img/default_logged_out_head.png"
+          alt=""
+        />
+        <p class="welcome-kicker mcr">Signed in</p>
+        <p class="welcome-title mct whitetext">Welcome, <span id="welcomeName">Player</span></p>
+        <div class="welcome-bar"><span></span></div>
+      </div>
+    </div>
+
+    <template id="skinLoginRequiredTemplate">
+      <div class="skin-login-required">
+        <img class="skin-login-head" src="./static/img/default_logged_out_head.png" alt="" />
+        <p class="skin-login-title mct whitetext">Sign in to manage skins</p>
+        <p class="skin-login-text mcr">
+          Please log in with Microsoft first before accessing the Skin page.
+        </p>
+        <button class="mcbtn skin-login-btn" data-action="skin-login" type="button">
+          Login with Microsoft
+        </button>
+      </div>
+    </template>
+
+    <div
+      id="onboardingBackdrop"
+      class="onboarding-backdrop hidden"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="onboardingTitle"
+    >
+      <div class="onboarding-dialog mcsection">
+        <div class="onboarding-top">
+          <p class="onboarding-step-count mcr" id="onboardingStepCount">Step 1 of 5</p>
+          <button id="onboardingSkipBtn" class="onboarding-skip mcr" type="button">
+            Skip setup
+          </button>
+        </div>
+
+        <section class="onboarding-step active" data-onboarding-step="welcome">
+          <img class="onboarding-hero-icon" src="./static/img/rocket.svg" alt="" />
+          <h2 id="onboardingTitle" class="onboarding-title mct whitetext">
+            Welcome to Eclipse Client
+          </h2>
+          <p class="onboarding-text mcr">
+            A quick setup gets you signed in, picks the installation you want to play, and sets how
+            the launcher behaves. It takes under a minute.
+          </p>
+        </section>
+
+        <section class="onboarding-step" data-onboarding-step="account">
+          <h2 class="onboarding-title mct whitetext">Sign in</h2>
+          <p class="onboarding-text mcr">
+            Sign in with the Microsoft account that owns Minecraft: Java Edition. You need this to
+            play and to manage skins.
+          </p>
+
+          <div class="onboarding-account">
+            <img
+              id="onboardingAccountHead"
+              class="onboarding-account-head"
+              src="./static/img/default_logged_out_head.png"
+              alt=""
+            />
+            <div class="onboarding-account-text">
+              <p id="onboardingAccountName" class="mct whitetext">Not signed in</p>
+              <p id="onboardingAccountSub" class="mcr">
+                You can also do this later from the sidebar.
+              </p>
+            </div>
+          </div>
+
+          <button id="onboardingLoginBtn" class="mcbtn onboarding-wide-btn" type="button">
+            Login with Microsoft
+          </button>
+        </section>
+
+        <section class="onboarding-step" data-onboarding-step="installation">
+          <h2 class="onboarding-title mct whitetext">Pick an installation</h2>
+          <p class="onboarding-text mcr">
+            This is what the Start button runs. Default is the Eclipse Client. You can add more in
+            Installations and run several at the same time.
+          </p>
+
+          <div id="onboardingProfileList" class="onboarding-profile-list"></div>
+        </section>
+
+        <section class="onboarding-step" data-onboarding-step="preferences">
+          <h2 class="onboarding-title mct whitetext">Launcher behaviour</h2>
+          <p class="onboarding-text mcr">
+            Click a row to toggle it. You can change these in Settings.
+          </p>
+
+          <label class="settings-row settings-row-toggle onboarding-row">
+            <div>
+              <p class="settings-row-title whitetext mct">Keep launcher open</p>
+              <p class="settings-row-desc whitetext mcr">Stay open after Minecraft starts.</p>
+            </div>
+            <span class="block-switch">
+              <input id="onboardingKeepOpen" type="checkbox" />
+              <span class="block-switch-track">
+                <span class="block-switch-knob"></span>
+              </span>
+            </span>
+          </label>
+
+          <label class="settings-row settings-row-toggle onboarding-row">
+            <div>
+              <p class="settings-row-title whitetext mct">Open console on launch</p>
+              <p class="settings-row-desc whitetext mcr">Show the game log when you press Start.</p>
+            </div>
+            <span class="block-switch">
+              <input id="onboardingOpenConsole" type="checkbox" />
+              <span class="block-switch-track">
+                <span class="block-switch-knob"></span>
+              </span>
+            </span>
+          </label>
+        </section>
+
+        <section class="onboarding-step" data-onboarding-step="done">
+          <img class="onboarding-minecraft-logo" src="./static/img/minecraft.svg" alt="Minecraft" />
+          <h2 class="onboarding-title mct whitetext">You're all set</h2>
+          <p id="onboardingSummary" class="onboarding-text mcr"></p>
+        </section>
+
+        <div class="onboarding-footer">
+          <div id="onboardingDots" class="onboarding-dots" aria-hidden="true"></div>
+
+          <div class="onboarding-buttons">
+            <button id="onboardingBackBtn" class="mcbtn" type="button">Back</button>
+            <button id="onboardingNextBtn" class="mcbtn green" type="button">Get started</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <script src="../../node_modules/skinview3d/bundles/skinview3d.bundle.js"></script>
     <script src="./renderer.js"></script>
   </body>

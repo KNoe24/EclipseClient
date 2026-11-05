@@ -1,5 +1,6 @@
 const { app } = require("electron");
 const { autoUpdater } = require("electron-updater");
+const storage = require("./storage");
 
 const LAUNCHER_UPDATE_URL = "https://raw.githubusercontent.com/KNoe24/eclipse-updates/launcher/";
 
@@ -130,6 +131,19 @@ async function check() {
     updateUrl: LAUNCHER_UPDATE_URL,
     appVersion: app.getVersion(),
   });
+
+  if (storage.isPortable()) {
+    const message =
+      "Auto-update is off in portable mode. Download the new portable version to update.";
+
+    sendStatus("dev-mode", { message });
+
+    return {
+      ok: false,
+      portable: true,
+      message,
+    };
+  }
 
   if (!app.isPackaged) {
     sendStatus("dev-mode", {

@@ -76,3 +76,18 @@ Example: (manifest.json)
   ]
 }
 ```
+
+## 3. Portable Mode
+
+In portable mode all launcher data (accounts, installations, skins, Minecraft files and Electron's own cache) is stored in an `EclipseData` folder next to the launcher instead of `%APPDATA%/.eclipse-client`.
+
+The launcher runs portable when any of these is true:
+
+- it is the portable build (`npm run build:portable`, creates `Eclipse Client-<version>-portable.exe`)
+- a `portable.txt` (or `portable`) file is next to the launcher executable
+- an `EclipseData` folder already exists next to the launcher executable
+- the `ECLIPSE_DATA_DIR` environment variable points to a folder
+
+Paths inside the data folder are saved relative to it, so the whole folder can be moved to another drive or PC.
+
+Launcher auto-update is turned off in portable mode; update by replacing the portable exe.

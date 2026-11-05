@@ -3,11 +3,14 @@ const { contextBridge, ipcRenderer, webUtils } = require("electron");
 contextBridge.exposeInMainWorld("launcherAPI", {
   system: {
     getMemoryInfo: () => ipcRenderer.invoke("system:getMemoryInfo"),
+    getAppInfo: () => ipcRenderer.invoke("system:getAppInfo"),
   },
 
   auth: {
     login: () => ipcRenderer.invoke("auth:login"),
     getAccount: () => ipcRenderer.invoke("auth:getAccount"),
+    loginOffline: (username) => ipcRenderer.invoke("auth:loginOffline", username),
+    getOfflineEligibility: () => ipcRenderer.invoke("auth:getOfflineEligibility"),
     logout: () => ipcRenderer.invoke("auth:logout"),
   },
 
@@ -97,8 +100,9 @@ contextBridge.exposeInMainWorld("launcherAPI", {
 
   launcher: {
     launch: (profileId) => ipcRenderer.invoke("launcher:launch", profileId),
-    isRunning: () => ipcRenderer.invoke("launcher:isRunning"),
-    kill: () => ipcRenderer.invoke("launcher:kill"),
+    isRunning: (profileId = null) => ipcRenderer.invoke("launcher:isRunning", profileId),
+    listInstances: () => ipcRenderer.invoke("launcher:listInstances"),
+    kill: (instanceId = null) => ipcRenderer.invoke("launcher:kill", instanceId),
   },
 
   updater: {
@@ -121,8 +125,16 @@ contextBridge.exposeInMainWorld("launcherAPI", {
       ipcRenderer.on("game:log", (_event, line) => callback(line));
     },
 
+    onInstanceLog: (callback) => {
+      ipcRenderer.on("instance:log", (_event, data) => callback(data));
+    },
+
     onGameClose: (callback) => {
       ipcRenderer.on("game:close", (_event, data) => callback(data));
+    },
+
+    onInstancesChanged: (callback) => {
+      ipcRenderer.on("launcher:instances", (_event, list) => callback(list));
     },
 
     onUpdaterStatus: (callback) => {

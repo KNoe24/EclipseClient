@@ -3,6 +3,10 @@ const path = require("path");
 const { app } = require("electron");
 
 const LAUNCHER_FOLDER_NAME = ".eclipse-client";
+const PORTABLE_DATA_FOLDER = "EclipseData";
+const PORTABLE_MARKER_FILES = ["portable.txt", "portable"];
+
+let cachedRoot = null;
 
 function ensureDir(dir) {
   if (!dir) return "";
@@ -10,10 +14,66 @@ function ensureDir(dir) {
   return dir;
 }
 
+function getLauncherExecutableDir() {
+  if (process.env.PORTABLE_EXECUTABLE_DIR) return process.env.PORTABLE_EXECUTABLE_DIR;
+  if (process.env.APPIMAGE) return path.dirname(process.env.APPIMAGE);
+  if (app.isPackaged) return path.dirname(process.execPath);
+  return "";
+}
+
+function resolveDataRoot() {
+  if (process.env.ECLIPSE_DATA_DIR) {
+    return { dir: path.resolve(process.env.ECLIPSE_DATA_DIR), portable: true };
+  }
+
+  const exeDir = getLauncherExecutableDir();
+
+  if (exeDir) {
+    const portableDir = path.join(exeDir, PORTABLE_DATA_FOLDER);
+    const hasMarker = PORTABLE_MARKER_FILES.some((name) => fs.existsSync(path.join(exeDir, name)));
+
+    if (process.env.PORTABLE_EXECUTABLE_DIR || hasMarker || fs.existsSync(portableDir)) {
+      return { dir: portableDir, portable: true };
+    }
+  }
+
+  return { dir: path.join(app.getPath("appData"), LAUNCHER_FOLDER_NAME), portable: false };
+}
+
+function getDataRootInfo() {
+  if (!cachedRoot) {
+    cachedRoot = resolveDataRoot();
+    ensureDir(cachedRoot.dir);
+  }
+
+  return cachedRoot;
+}
+
+function isPortable() {
+  return getDataRootInfo().portable;
+}
+
 function getRootDir() {
-  const dir = path.join(app.getPath("appData"), LAUNCHER_FOLDER_NAME);
-  ensureDir(dir);
-  return dir;
+  return getDataRootInfo().dir;
+}
+
+function toStoredPath(value) {
+  const text = String(value || "").trim();
+  if (!text || !path.isAbsolute(text)) return text;
+
+  const relative = path.relative(getRootDir(), text);
+
+  if (relative === "") return ".";
+  if (relative.startsWith("..") || path.isAbsolute(relative)) return text;
+
+  return relative.split(path.sep).join("/");
+}
+
+function fromStoredPath(value) {
+  const text = String(value || "").trim();
+  if (!text || path.isAbsolute(text)) return text;
+
+  return path.resolve(getRootDir(), text);
 }
 
 /*
@@ -205,6 +265,10 @@ function writeJson(name, data) {
 
 module.exports = {
   ensureDir,
+  isPortable,
+  getLauncherExecutableDir,
+  toStoredPath,
+  fromStoredPath,
   ensureRuntimeDirs,
   ensureProfileRuntimeDirs,
 
