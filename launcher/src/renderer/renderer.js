@@ -67,6 +67,7 @@ const state = {
   runningInstances: [],
   launcherUpdate: null,
   clientUpdateInfo: null,
+  updateSettings: null,
   installationBackdropMouseDownOnBackdrop: false,
   installationEditor: {
     profileId: null,
@@ -3137,7 +3138,7 @@ async function syncDefaultClient(mode, force = true) {
   }
 }
 
-async function checkDefaultClientInfoManually() {
+async function checkDefaultClientInfoManually(options = {}) {
   try {
     const info = await window.launcherAPI.clientUpdater.getDefaultInfo();
 
@@ -3159,7 +3160,9 @@ async function checkDefaultClientInfoManually() {
 
     setStatus("Default client update available.");
 
-    if (info.updateMode === "ask") {
+    const autoClient = state.updateSettings?.autoUpdateClient !== false;
+
+    if (options.manual || (autoClient && info.updateMode === "ask")) {
       showUpdateModePrompt(info);
     }
   } catch (error) {
@@ -4118,6 +4121,12 @@ async function initEvents() {
       return;
     }
 
+    if (data.type === "disabled") {
+      appendConsole(`[client updater] ${message}`);
+      setUpdateStatus(message);
+      return;
+    }
+
     if (data.type === "done") {
       setClientUpdateOverlayProgress(100);
 
@@ -4321,8 +4330,7 @@ function moveMcSelectFocus(direction) {
   if (items.length === 0) return;
 
   const current = items.indexOf(document.activeElement);
-  const start =
-    current === -1 ? items.findIndex((item) => item.classList.contains("selected")) : current;
+  const start = current === -1 ? items.findIndex((item) => item.classList.contains("selected")) : current;
   const next = items[(start + direction + items.length) % items.length];
 
   next.focus();
@@ -4442,10 +4450,7 @@ function initMcSelects() {
         return;
       }
 
-      if (
-        open.menu.contains(document.activeElement) ||
-        document.activeElement === open.entry.button
-      ) {
+      if (open.menu.contains(document.activeElement) || document.activeElement === open.entry.button) {
         if (event.key === "ArrowDown" || event.key === "ArrowUp") {
           event.preventDefault();
           event.stopPropagation();
@@ -4722,7 +4727,8 @@ function unmountWidget(id) {
 
   try {
     mounted.cleanup?.();
-  } catch {}
+  } catch {
+  }
 
   mounted.element.remove();
   homeWidgets.mounted.delete(id);
@@ -4820,9 +4826,7 @@ function moveWidget(id, targetIndex) {
 }
 
 async function getServerStatus(ip) {
-  const address = String(ip || "")
-    .trim()
-    .toLowerCase();
+  const address = String(ip || "").trim().toLowerCase();
   if (!address) return null;
 
   const cached = homeWidgets.serverStatusCache.get(address);
@@ -4853,8 +4857,7 @@ function formatPlayerNumber(value) {
 }
 
 function widgetSkinSource() {
-  if (!state.account?.username || state.account.type === "offline")
-    return { skin: DEFAULT_STEVE_SKIN, cape: "", slim: false };
+  if (!state.account?.username || state.account.type === "offline") return { skin: DEFAULT_STEVE_SKIN, cape: "", slim: false };
 
   const skin = getCurrentSkinFromMinecraftProfile();
   const cape = getActiveCapeFromMinecraftProfile?.();
@@ -4872,7 +4875,8 @@ async function ensureSkinProfileForWidgets() {
 
   try {
     state.skins.minecraftProfile = await window.launcherAPI.skins.getMinecraftProfile();
-  } catch {}
+  } catch {
+  }
 }
 
 async function ensureLatestMinecraftVersions() {
@@ -5002,9 +5006,8 @@ const WIDGET_RENDERERS = {
 
     update(body, settings) {
       const key =
-        String(settings.player || "")
-          .trim()
-          .toLowerCase() || `account:${state.account?.uuid || state.account?.username || ""}`;
+        String(settings.player || "").trim().toLowerCase() ||
+        `account:${state.account?.uuid || state.account?.username || ""}`;
       const cached = homeWidgets.pvphqResults.get(key);
 
       this.draw(body, settings, cached || { loading: true });
@@ -5123,8 +5126,7 @@ const WIDGET_RENDERERS = {
       position.textContent =
         settings.showPosition && ladder.position ? `#${formatPlayerNumber(ladder.position)}` : "";
 
-      if (!ladder.placed)
-        addStat("Placements", `${ladder.placementGames}/${ladder.placementTarget}`);
+      if (!ladder.placed) addStat("Placements", `${ladder.placementGames}/${ladder.placementTarget}`);
       if (settings.showElo) addStat("Elo", formatPlayerNumber(ladder.rating));
       if (settings.showTr) addStat("TR", formatPlayerNumber(ladder.tr));
       if (settings.showPeak) addStat("Peak", formatPlayerNumber(ladder.peak));
@@ -5136,9 +5138,7 @@ const WIDGET_RENDERERS = {
         footer.push(
           `Global ${result.globalRank || ""}${
             result.globalPosition ? ` #${formatPlayerNumber(result.globalPosition)}` : ""
-          }`
-            .replace(/\s+/g, " ")
-            .trim()
+          }`.replace(/\s+/g, " ").trim()
         );
       }
 
@@ -5247,7 +5247,7 @@ const WIDGET_RENDERERS = {
       body.querySelector('[data-action="check-updates"]')?.addEventListener("click", async () => {
         slot(body, "launcherStatus").textContent = "Checking...";
         await window.launcherAPI.updater.check();
-        await checkDefaultClientInfoManually();
+        await checkDefaultClientInfoManually({ manual: true });
         this.update(body, settings);
       });
 
@@ -5283,6 +5283,7 @@ const WIDGET_RENDERERS = {
         "download-progress": `Downloading update: ${Math.round(launcher.progress?.percent || 0)}%`,
         downloaded: "Update ready. Restart to install.",
         "dev-mode": launcher.message || "Updates only work in the installed app.",
+        disabled: "Auto-update is off. Press Check to update.",
         error: "Update check failed.",
       }[launcher.type];
 
@@ -5502,8 +5503,7 @@ function buildWidgetSettingsForm(id) {
 
     const apply = () => {
       if (input.type === "checkbox") settings[key] = input.checked;
-      else if (input.type === "range" || input.type === "number")
-        settings[key] = Number(input.value);
+      else if (input.type === "range" || input.type === "number") settings[key] = Number(input.value);
       else settings[key] = input.value.trim();
 
       saveHomeWidgetConfig();
@@ -5839,10 +5839,7 @@ function renderDeveloperInstances() {
     list.length === 0
       ? "None."
       : list
-          .map(
-            (instance) =>
-              `${instance.profileName} #${instance.number} (${instance.status}, pid ${instance.pid || "?"})`
-          )
+          .map((instance) => `${instance.profileName} #${instance.number} (${instance.status}, pid ${instance.pid || "?"})`)
           .join(" · ");
 }
 
@@ -6096,7 +6093,8 @@ function renderOnboardingStep() {
   const dots = $("#onboardingDots");
   if (dots) {
     dots.innerHTML = ONBOARDING_STEPS.map((_, index) => {
-      const cls = index === onboarding.index ? "current" : index < onboarding.index ? "done" : "";
+      const cls =
+        index === onboarding.index ? "current" : index < onboarding.index ? "done" : "";
       return `<span class="onboarding-dot ${cls}"></span>`;
     }).join("");
   }
@@ -6107,8 +6105,7 @@ function renderOnboardingStep() {
   const next = $("#onboardingNextBtn");
   if (next) {
     if (step === "welcome") next.textContent = "Get started";
-    else if (step === "account")
-      next.textContent = state.account?.username ? "Next" : "Skip for now";
+    else if (step === "account") next.textContent = state.account?.username ? "Next" : "Skip for now";
     else if (step === "done") next.textContent = "Finish";
     else next.textContent = "Next";
   }
@@ -6183,6 +6180,71 @@ function onboardingBack() {
 
   onboarding.index -= 1;
   renderOnboardingStep();
+}
+
+async function initUpdateSettings() {
+  const launcherSwitch = $("#settingAutoUpdateLauncher");
+  const clientSwitch = $("#settingAutoUpdateClient");
+  const status = $("#settingsUpdateStatus");
+
+  try {
+    state.updateSettings = await window.launcherAPI.settings.get();
+  } catch {
+    state.updateSettings = { autoUpdateLauncher: true, autoUpdateClient: true };
+  }
+
+  if (launcherSwitch) launcherSwitch.checked = state.updateSettings.autoUpdateLauncher;
+  if (clientSwitch) clientSwitch.checked = state.updateSettings.autoUpdateClient;
+
+  const bind = (input, key, label) => {
+    input?.addEventListener("change", async () => {
+      try {
+        state.updateSettings = await window.launcherAPI.settings.set(key, input.checked);
+        setStatus(`${label} auto-update ${input.checked ? "on" : "off"}.`);
+        appendConsole(`[settings] ${label} auto-update ${input.checked ? "enabled" : "disabled"}.`);
+      } catch (error) {
+        input.checked = !input.checked;
+        alert(friendlyErrorMessage(error, "Could not save the setting."));
+      }
+    });
+  };
+
+  bind(launcherSwitch, "autoUpdateLauncher", "Launcher");
+  bind(clientSwitch, "autoUpdateClient", "Client");
+
+  $("#checkUpdatesNowBtn")?.addEventListener("click", async () => {
+    const button = $("#checkUpdatesNowBtn");
+
+    button.disabled = true;
+    if (status) status.textContent = "Checking the launcher and the client...";
+
+    try {
+      await window.launcherAPI.updater.check();
+      await checkDefaultClientInfoManually({ manual: true });
+
+      const launcher = state.launcherUpdate || {};
+      const client = state.clientUpdateInfo || {};
+
+      const launcherText =
+        launcher.type === "downloaded"
+          ? "Launcher update ready. It installs when you close the launcher, or use Restart & update in the Launcher update widget."
+          : launcher.type === "available" || launcher.type === "download-progress"
+            ? "Launcher update downloading..."
+            : launcher.type === "error"
+              ? "Launcher update check failed (see Console)."
+              : launcher.message || "Launcher is up to date.";
+
+      const clientText = client.updateAvailable
+        ? `Client update ${client.remoteClientVersion || ""} available.`
+        : "Client is up to date.";
+
+      if (status) status.textContent = `${launcherText} ${clientText}`;
+    } catch (error) {
+      if (status) status.textContent = friendlyErrorMessage(error, "Update check failed.");
+    } finally {
+      button.disabled = false;
+    }
+  });
 }
 
 async function renderDataFolderSetting() {
@@ -6391,6 +6453,7 @@ async function boot() {
   initHomeWidgets();
   initJavaInstallProgress();
   initDataFolderSetting();
+  await initUpdateSettings();
   initDeveloperScreen();
   initOnboardingEvents();
 

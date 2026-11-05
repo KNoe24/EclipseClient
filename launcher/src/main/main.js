@@ -9,6 +9,7 @@ const { app, BrowserWindow, ipcMain, dialog, Menu, shell } = require("electron")
 const authService = require("./services/auth");
 const pvphqService = require("./services/pvphq");
 const javaRuntimeService = require("./services/javaRuntime");
+const settingsService = require("./services/settings");
 const launcherService = require("./services/launcher");
 const profileService = require("./services/profiles");
 const modsService = require("./services/mods");
@@ -768,6 +769,18 @@ async function useSkin(skinIdValue, options = {}) {
 
 async function checkDefaultClientOnStartup() {
   try {
+    if (!settingsService.getSettings().autoUpdateClient) {
+      const selected = await profileService.getSelectedProfile();
+
+      mainWindow.webContents.send("clientUpdater:status", {
+        type: "disabled",
+        message: "Client auto-update is off. Use Check for updates in Settings to update.",
+      });
+
+      await discordService.setLauncherActivity(selected?.name || "Launcher");
+      return;
+    }
+
     await discordService.setUpdatingActivity();
 
     const info = await clientUpdaterService.getDefaultClientUpdateInfo();
@@ -1008,8 +1021,7 @@ app.whenReady().then(async () => {
       const renaming = requestedName !== current.name;
       const movingDir =
         Boolean(requestedDir) &&
-        path.resolve(requestedDir).toLowerCase() !==
-          path.resolve(current.gameDir || "").toLowerCase();
+        path.resolve(requestedDir).toLowerCase() !== path.resolve(current.gameDir || "").toLowerCase();
 
       if (renaming || movingDir) {
         throw new Error("Stop this installation before renaming it or changing its game folder.");
@@ -1291,7 +1303,21 @@ app.whenReady().then(async () => {
   });
 
   ipcMain.handle("updater:check", async () => {
-    return updaterService.check();
+    return updaterService.check({ manual: true });
+  });
+
+  ipcMain.handle("settings:get", async () => {
+    return settingsService.getSettings();
+  });
+
+  ipcMain.handle("settings:set", async (_event, key, value) => {
+    const updated = settingsService.setSetting(String(key), value);
+
+    if (key === "autoUpdateLauncher") {
+      updaterService.setAutoUpdateLauncher(updated.autoUpdateLauncher);
+    }
+
+    return updated;
   });
 
   ipcMain.handle("updater:download", async () => {

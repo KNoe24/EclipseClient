@@ -4481,20 +4481,7 @@ select.editor-input {
   width: 0.9rem;
   height: 0.6rem;
   background: #cfcfcf;
-  clip-path: polygon(
-    0 0,
-    100% 0,
-    100% 34%,
-    83% 34%,
-    83% 67%,
-    67% 67%,
-    67% 100%,
-    33% 100%,
-    33% 67%,
-    17% 67%,
-    17% 34%,
-    0 34%
-  );
+  clip-path: polygon(0 0, 100% 0, 100% 34%, 83% 34%, 83% 67%, 67% 67%, 67% 100%, 33% 100%, 33% 67%, 17% 67%, 17% 34%, 0 34%);
   transition: transform 0.12s steps(2, end);
 }
 

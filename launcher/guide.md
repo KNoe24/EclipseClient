@@ -90,4 +90,23 @@ The launcher runs portable when any of these is true:
 
 Paths inside the data folder are saved relative to it, so the whole folder can be moved to another drive or PC.
 
-Launcher auto-update is turned off in portable mode; update by replacing the portable exe.
+### Portable updates
+
+The portable `.exe` updates itself from the same launcher update folder:
+
+1. Increase `version` in `package.json`.
+2. Run `npm run build:portable` (or `npm run build:win` for installer + portable). This also writes `dist/latest-portable.json`.
+3. Upload `Eclipse Client-<version>-portable.exe` and `latest-portable.json` to the launcher update folder, next to `latest.yml`.
+
+The portable launcher reads `latest-portable.json`, downloads the new exe next to itself as `<name>.exe.update`, checks its sha512, and swaps it in when the launcher closes (or right away with "Restart & update"). If the swap can't happen, the old exe is left untouched.
+
+A portable folder made with `portable.txt` (not the portable `.exe`) can't replace itself; update it by copying in the new launcher files.
+
+## 4. Turning Auto-update Off
+
+Settings → Updates has two separate switches:
+
+- **Auto-update Launcher**: start-up check, background download and install-on-close for the launcher (installer and portable).
+- **Auto-update Client**: the start-up sync of the Default installation's client files.
+
+With a switch off nothing happens automatically; **Check now** in Settings (or Check in the Launcher update widget) still checks and offers the update.

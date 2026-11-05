@@ -1,6 +1,6 @@
 {
   "name": "eclipse-client",
-  "version": "1.0.1",
+  "version": "1.0.0",
   "description": "Eclipse Client",
   "main": "src/main/main.js",
   "author": "KNeo24",
@@ -9,7 +9,7 @@
     "dev": "electron .",
     "start": "electron .",
     "build:dir": "electron-builder --dir",
-    "build:win": "electron-builder --win nsis portable --x64",
+    "build:win": "electron-builder --win nsis portable --x64 && node scripts/make-portable-manifest.js",
     "build:mac": "electron-builder --mac dmg",
     "build:linux": "electron-builder --linux AppImage",
     "dist": "electron-builder",
@@ -17,7 +17,7 @@
     "push:p": "node scripts/git-push.js",
     "format": "prettier . --write",
     "format:check": "prettier . --check",
-    "build:portable": "electron-builder --win portable --x64"
+    "build:portable": "electron-builder --win portable --x64 && node scripts/make-portable-manifest.js"
   },
   "dependencies": {
     "discord-rpc": "4.0.1",

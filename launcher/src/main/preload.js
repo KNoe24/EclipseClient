@@ -103,6 +103,11 @@ contextBridge.exposeInMainWorld("launcherAPI", {
     },
   },
 
+  settings: {
+    get: () => ipcRenderer.invoke("settings:get"),
+    set: (key, value) => ipcRenderer.invoke("settings:set", key, value),
+  },
+
   pvphq: {
     getStats: (player = "") => ipcRenderer.invoke("pvphq:getStats", player),
   },

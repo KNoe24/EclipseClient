@@ -63,12 +63,8 @@ function readJsonFile(file) {
 }
 
 function compareVersions(a, b) {
-  const pa = String(a)
-    .split(/[.-]/)
-    .map((part) => Number(part) || 0);
-  const pb = String(b)
-    .split(/[.-]/)
-    .map((part) => Number(part) || 0);
+  const pa = String(a).split(/[.-]/).map((part) => Number(part) || 0);
+  const pb = String(b).split(/[.-]/).map((part) => Number(part) || 0);
 
   for (let index = 0; index < Math.max(pa.length, pb.length); index += 1) {
     const diff = (pa[index] || 0) - (pb[index] || 0);
@@ -83,12 +79,9 @@ function fallbackJavaForVersion(minecraftVersion) {
 
   if (!/^\d+\.\d+/.test(version)) return { component: COMPONENT_BY_MAJOR[21], majorVersion: 21 };
   if (/^\d{2}\./.test(version)) return { component: COMPONENT_BY_MAJOR[25], majorVersion: 25 };
-  if (compareVersions(version, "1.20.5") >= 0)
-    return { component: COMPONENT_BY_MAJOR[21], majorVersion: 21 };
-  if (compareVersions(version, "1.18") >= 0)
-    return { component: COMPONENT_BY_MAJOR[17], majorVersion: 17 };
-  if (compareVersions(version, "1.17") >= 0)
-    return { component: COMPONENT_BY_MAJOR[16], majorVersion: 16 };
+  if (compareVersions(version, "1.20.5") >= 0) return { component: COMPONENT_BY_MAJOR[21], majorVersion: 21 };
+  if (compareVersions(version, "1.18") >= 0) return { component: COMPONENT_BY_MAJOR[17], majorVersion: 17 };
+  if (compareVersions(version, "1.17") >= 0) return { component: COMPONENT_BY_MAJOR[16], majorVersion: 16 };
 
   return { component: COMPONENT_BY_MAJOR[8], majorVersion: 8 };
 }
@@ -132,9 +125,7 @@ async function getRequiredJava(profile, customVersionId = "") {
 
   try {
     const manifest = await requestJson(VERSION_MANIFEST_URL);
-    const entry = (manifest.versions || []).find(
-      (version) => version.id === profile.minecraftVersion
-    );
+    const entry = (manifest.versions || []).find((version) => version.id === profile.minecraftVersion);
 
     if (entry?.url) {
       const versionJson = await requestJson(entry.url);
@@ -157,14 +148,12 @@ async function findInstalledJava(majorVersion) {
     }
   }
 
-  return (
-    installedJavaCache.find((java) => java.major === majorVersion && fs.existsSync(java.path)) ||
-    null
-  );
+  return installedJavaCache.find((java) => java.major === majorVersion && fs.existsSync(java.path)) || null;
 }
 
 function javaExecutableIn(installDir, files) {
-  const names = process.platform === "win32" ? ["bin/javaw.exe", "bin/java.exe"] : ["bin/java"];
+  const names =
+    process.platform === "win32" ? ["bin/javaw.exe", "bin/java.exe"] : ["bin/java"];
 
   for (const name of names) {
     const match = Object.keys(files || {}).find(
@@ -207,11 +196,7 @@ async function downloadFile(url, destination, expectedSha1) {
 
   const hash = crypto.createHash("sha1");
 
-  await pipeline(
-    Readable.fromWeb(response.body),
-    sha1Transform(hash),
-    fs.createWriteStream(tempFile)
-  );
+  await pipeline(Readable.fromWeb(response.body), sha1Transform(hash), fs.createWriteStream(tempFile));
 
   const actual = hash.digest("hex");
 
@@ -387,13 +372,7 @@ async function checkJava(profile, customVersionId = "") {
   const installed = await findInstalledJava(required.majorVersion);
 
   if (installed) {
-    return {
-      ok: true,
-      javaPath: installed.path,
-      source: "system",
-      label: installed.label,
-      required,
-    };
+    return { ok: true, javaPath: installed.path, source: "system", label: installed.label, required };
   }
 
   return {
@@ -415,12 +394,8 @@ async function resolveJavaForLaunch(profile, customVersionId, log = () => {}) {
     throw error;
   }
 
-  if (result.source === "profile")
-    log(`[java] Using the installation's Java Path: ${result.javaPath}`);
-  if (result.source === "launcher")
-    log(
-      `[java] Using launcher Java ${result.required.majorVersion} (${result.required.component}).`
-    );
+  if (result.source === "profile") log(`[java] Using the installation's Java Path: ${result.javaPath}`);
+  if (result.source === "launcher") log(`[java] Using launcher Java ${result.required.majorVersion} (${result.required.component}).`);
   if (result.source === "system") log(`[java] Using installed ${result.label}`);
 
   return result.javaPath;
