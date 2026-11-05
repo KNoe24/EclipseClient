@@ -7,6 +7,7 @@ const https = require("https");
 const { app, BrowserWindow, ipcMain, dialog, Menu, shell } = require("electron");
 
 const authService = require("./services/auth");
+const pvphqService = require("./services/pvphq");
 const launcherService = require("./services/launcher");
 const profileService = require("./services/profiles");
 const modsService = require("./services/mods");
@@ -917,6 +918,22 @@ app.whenReady().then(async () => {
     return authService.loginMicrosoft();
   });
 
+  ipcMain.handle("pvphq:getStats", async (_event, player = "") => {
+    let query = String(player || "").trim();
+
+    if (!query) {
+      const account = await authService.getAccount();
+
+      if (!account?.username) {
+        throw new Error("Sign in or set a player name in the widget options.");
+      }
+
+      query = account.type === "offline" ? account.username : account.uuid || account.username;
+    }
+
+    return pvphqService.getStats(query);
+  });
+
   ipcMain.handle("auth:loginOffline", async (_event, username) => {
     return authService.loginOffline(username);
   });
@@ -990,8 +1007,7 @@ app.whenReady().then(async () => {
       const renaming = requestedName !== current.name;
       const movingDir =
         Boolean(requestedDir) &&
-        path.resolve(requestedDir).toLowerCase() !==
-          path.resolve(current.gameDir || "").toLowerCase();
+        path.resolve(requestedDir).toLowerCase() !== path.resolve(current.gameDir || "").toLowerCase();
 
       if (renaming || movingDir) {
         throw new Error("Stop this installation before renaming it or changing its game folder.");

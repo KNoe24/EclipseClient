@@ -332,6 +332,15 @@ function renderConsoleInstanceSelect() {
     consoleStore.view = CONSOLE_VIEW_ALL;
   }
 
+  const signature = JSON.stringify([consoleStore.view, options]);
+
+  if (select.dataset.signature === signature) {
+    renderConsoleStopButton();
+    return;
+  }
+
+  select.dataset.signature = signature;
+
   select.innerHTML = options
     .map(
       (option) =>
@@ -3245,6 +3254,7 @@ async function handleLogin() {
 
     state.skins.minecraftProfile = null;
     remountWidget("skin");
+    refreshWidget("pvphq");
     playWelcomeAnimation(refreshedAccount);
 
     return refreshedAccount;
@@ -4204,6 +4214,10 @@ function renderMcSelectMenu(select) {
 
   const { menu } = open;
   const selectedIndex = nativeSelectIndex.get.call(select);
+  const focusedIndex = menu.contains(document.activeElement)
+    ? document.activeElement.dataset.index
+    : null;
+  const scrollTop = menu.scrollTop;
 
   menu.innerHTML = "";
 
@@ -4235,6 +4249,12 @@ function renderMcSelectMenu(select) {
     const empty = mcSelectTemplate("mcSelectGroupTemplate");
     empty.textContent = "Nothing to choose";
     menu.appendChild(empty);
+  }
+
+  menu.scrollTop = scrollTop;
+
+  if (focusedIndex !== null) {
+    menu.querySelector(`.mc-select-option[data-index="${focusedIndex}"]`)?.focus();
   }
 }
 
@@ -4294,8 +4314,7 @@ function moveMcSelectFocus(direction) {
   if (items.length === 0) return;
 
   const current = items.indexOf(document.activeElement);
-  const start =
-    current === -1 ? items.findIndex((item) => item.classList.contains("selected")) : current;
+  const start = current === -1 ? items.findIndex((item) => item.classList.contains("selected")) : current;
   const next = items[(start + direction + items.length) % items.length];
 
   next.focus();
@@ -4415,10 +4434,7 @@ function initMcSelects() {
         return;
       }
 
-      if (
-        open.menu.contains(document.activeElement) ||
-        document.activeElement === open.entry.button
-      ) {
+      if (open.menu.contains(document.activeElement) || document.activeElement === open.entry.button) {
         if (event.key === "ArrowDown" || event.key === "ArrowUp") {
           event.preventDefault();
           event.stopPropagation();
@@ -4431,11 +4447,20 @@ function initMcSelects() {
     true
   );
 
-  window.addEventListener("resize", closeMcSelect);
+  window.addEventListener("resize", positionMcSelectMenu);
   document.addEventListener(
     "scroll",
     (event) => {
-      if (mcSelectState.open && !mcSelectState.open.menu.contains(event.target)) closeMcSelect();
+      const open = mcSelectState.open;
+      if (!open) return;
+
+      const target = event.target;
+      const movedButton =
+        target === document ||
+        target === document.documentElement ||
+        (target instanceof Element && target.contains(open.entry.wrapper));
+
+      if (movedButton) positionMcSelectMenu();
     },
     true
   );
@@ -4466,6 +4491,21 @@ const HOME_WIDGET_DEFS = {
     defaultEnabled: true,
     weight: 1,
     defaults: () => ({ animation: "walk", autoRotate: true, showCape: true, showName: true }),
+  },
+  pvphq: {
+    title: "PvPHQ rating",
+    defaultEnabled: true,
+    weight: 1,
+    defaults: () => ({
+      player: "",
+      ladder: "best",
+      showElo: true,
+      showTr: true,
+      showPeak: false,
+      showRecord: true,
+      showPosition: true,
+      showGlobal: true,
+    }),
   },
   time: {
     title: "Time",
@@ -4514,6 +4554,7 @@ const homeWidgets = {
   clockTimer: null,
   latestVersions: null,
   appInfo: null,
+  pvphqResults: new Map(),
   dragId: null,
 };
 
@@ -4670,7 +4711,8 @@ function unmountWidget(id) {
 
   try {
     mounted.cleanup?.();
-  } catch {}
+  } catch {
+  }
 
   mounted.element.remove();
   homeWidgets.mounted.delete(id);
@@ -4768,9 +4810,7 @@ function moveWidget(id, targetIndex) {
 }
 
 async function getServerStatus(ip) {
-  const address = String(ip || "")
-    .trim()
-    .toLowerCase();
+  const address = String(ip || "").trim().toLowerCase();
   if (!address) return null;
 
   const cached = homeWidgets.serverStatusCache.get(address);
@@ -4801,8 +4841,7 @@ function formatPlayerNumber(value) {
 }
 
 function widgetSkinSource() {
-  if (!state.account?.username || state.account.type === "offline")
-    return { skin: DEFAULT_STEVE_SKIN, cape: "", slim: false };
+  if (!state.account?.username || state.account.type === "offline") return { skin: DEFAULT_STEVE_SKIN, cape: "", slim: false };
 
   const skin = getCurrentSkinFromMinecraftProfile();
   const cape = getActiveCapeFromMinecraftProfile?.();
@@ -4820,7 +4859,8 @@ async function ensureSkinProfileForWidgets() {
 
   try {
     state.skins.minecraftProfile = await window.launcherAPI.skins.getMinecraftProfile();
-  } catch {}
+  } catch {
+  }
 }
 
 async function ensureLatestMinecraftVersions() {
@@ -4940,6 +4980,155 @@ const WIDGET_RENDERERS = {
           icon.classList.remove("hidden");
         }
       });
+    },
+  },
+
+  pvphq: {
+    mount(body, settings) {
+      this.update(body, settings);
+    },
+
+    update(body, settings) {
+      const key =
+        String(settings.player || "").trim().toLowerCase() ||
+        `account:${state.account?.uuid || state.account?.username || ""}`;
+      const cached = homeWidgets.pvphqResults.get(key);
+
+      this.draw(body, settings, cached || { loading: true });
+
+      window.launcherAPI.pvphq
+        .getStats(settings.player || "")
+        .then((result) => {
+          homeWidgets.pvphqResults.set(key, { result });
+          this.draw(body, settings, { result });
+        })
+        .catch((error) => {
+          const message = friendlyErrorMessage(error, "Could not load PvPHQ stats.");
+
+          if (cached?.result) {
+            this.draw(body, settings, { ...cached, stale: message });
+          } else {
+            homeWidgets.pvphqResults.set(key, { error: message });
+            this.draw(body, settings, { error: message });
+          }
+        });
+    },
+
+    draw(body, settings, { loading, result, error, stale }) {
+      const message = slot(body, "message");
+      const parts = ["top", "stats", "chips", "footer"].map((name) => slot(body, name));
+
+      const showMessage = (text) => {
+        message.textContent = text;
+        message.classList.remove("hidden");
+        parts.forEach((part) => part.classList.add("hidden"));
+      };
+
+      if (loading) return showMessage("Loading PvPHQ stats...");
+      if (error) return showMessage(error);
+
+      if (!result?.found) {
+        return showMessage(
+          result?.reason === "player"
+            ? `No Minecraft player called ${result.player}.`
+            : `${result?.name || "This player"} has no PvPHQ ranked games yet.`
+        );
+      }
+
+      message.classList.add("hidden");
+      parts.forEach((part) => part.classList.remove("hidden"));
+
+      const playerName = result.name || state.account?.username || "";
+      const stats = slot(body, "stats");
+      const chips = slot(body, "chips");
+      const tier = slot(body, "tier");
+      const position = slot(body, "position");
+
+      stats.innerHTML = "";
+      chips.innerHTML = "";
+
+      const addStat = (label, value) => {
+        const row = cloneTemplate("widget-row-tpl-pvphq-stat");
+        slot(row, "label").textContent = label;
+        slot(row, "value").textContent = value;
+        stats.appendChild(row);
+      };
+
+      const record = (wins, losses) => {
+        const games = wins + losses;
+        const rate = games > 0 ? Math.round((wins / games) * 100) : 0;
+        return `${formatPlayerNumber(wins)}W ${formatPlayerNumber(losses)}L · ${rate}%`;
+      };
+
+      slot(body, "player").textContent = playerName;
+
+      if (settings.ladder === "global") {
+        tier.textContent = result.globalRank || "Unranked";
+        tier.style.color = "";
+        slot(body, "ladder").textContent = "Global";
+        position.textContent =
+          settings.showPosition && result.globalPosition
+            ? `#${formatPlayerNumber(result.globalPosition)}`
+            : "";
+
+        addStat("Games", formatPlayerNumber(result.games));
+        if (settings.showRecord) addStat("Record", record(result.wins, result.losses));
+        addStat("Ladders", String(result.ladders.length));
+
+        for (const ladder of result.ladders.slice(0, 8)) {
+          const chip = cloneTemplate("widget-row-tpl-pvphq-chip");
+          slot(chip, "name").textContent = ladder.name;
+          slot(chip, "tier").textContent =
+            ladder.tier ||
+            (ladder.placed ? "Unranked" : `${ladder.placementGames}/${ladder.placementTarget}`);
+          slot(chip, "tier").style.color = ladder.tierColor || "";
+          chips.appendChild(chip);
+        }
+
+        slot(body, "footer").textContent = stale || "";
+        return;
+      }
+
+      const ladder =
+        settings.ladder === "best"
+          ? result.ladders[0]
+          : result.ladders.find((item) => item.key === settings.ladder);
+
+      if (!ladder) {
+        const ladderName =
+          document
+            .getElementById("widget-settings-tpl-pvphq")
+            ?.content.querySelector(`option[value="${settings.ladder}"]`)?.textContent ||
+          settings.ladder;
+
+        return showMessage(`${playerName || "This player"} has no ranked ${ladderName} games yet.`);
+      }
+
+      tier.textContent = ladder.tier || (ladder.placed ? "Unranked" : "Placements");
+      tier.style.color = ladder.tierColor || "";
+      slot(body, "ladder").textContent = ladder.name;
+      position.textContent =
+        settings.showPosition && ladder.position ? `#${formatPlayerNumber(ladder.position)}` : "";
+
+      if (!ladder.placed) addStat("Placements", `${ladder.placementGames}/${ladder.placementTarget}`);
+      if (settings.showElo) addStat("Elo", formatPlayerNumber(ladder.rating));
+      if (settings.showTr) addStat("TR", formatPlayerNumber(ladder.tr));
+      if (settings.showPeak) addStat("Peak", formatPlayerNumber(ladder.peak));
+      if (settings.showRecord) addStat("Record", record(ladder.wins, ladder.losses));
+
+      const footer = [];
+
+      if (settings.showGlobal && (result.globalRank || result.globalPosition)) {
+        footer.push(
+          `Global ${result.globalRank || ""}${
+            result.globalPosition ? ` #${formatPlayerNumber(result.globalPosition)}` : ""
+          }`.replace(/\s+/g, " ").trim()
+        );
+      }
+
+      if (stale) footer.push(stale);
+
+      slot(body, "footer").textContent = footer.join(" · ");
     },
   },
 
@@ -5297,8 +5486,7 @@ function buildWidgetSettingsForm(id) {
 
     const apply = () => {
       if (input.type === "checkbox") settings[key] = input.checked;
-      else if (input.type === "range" || input.type === "number")
-        settings[key] = Number(input.value);
+      else if (input.type === "range" || input.type === "number") settings[key] = Number(input.value);
       else settings[key] = input.value.trim();
 
       saveHomeWidgetConfig();
@@ -5521,7 +5709,7 @@ function bindBoardDrag(element, id) {
 }
 
 function refreshDataWidgets() {
-  for (const id of ["servers", "players"]) refreshWidget(id);
+  for (const id of ["servers", "players", "pvphq"]) refreshWidget(id);
 }
 
 let consoleWidgetRefreshScheduled = false;
@@ -5634,10 +5822,7 @@ function renderDeveloperInstances() {
     list.length === 0
       ? "None."
       : list
-          .map(
-            (instance) =>
-              `${instance.profileName} #${instance.number} (${instance.status}, pid ${instance.pid || "?"})`
-          )
+          .map((instance) => `${instance.profileName} #${instance.number} (${instance.status}, pid ${instance.pid || "?"})`)
           .join(" · ");
 }
 
@@ -5717,6 +5902,7 @@ async function loginOfflineFromDeveloperScreen() {
     state.skins.loaded = false;
     state.skins.minecraftProfile = null;
     remountWidget("skin");
+    refreshWidget("pvphq");
 
     setDevStatus(`Signed in offline as ${account?.username || name}.`, "ok");
     setStatus(`Offline account: ${account?.username || name}.`);
@@ -5890,7 +6076,8 @@ function renderOnboardingStep() {
   const dots = $("#onboardingDots");
   if (dots) {
     dots.innerHTML = ONBOARDING_STEPS.map((_, index) => {
-      const cls = index === onboarding.index ? "current" : index < onboarding.index ? "done" : "";
+      const cls =
+        index === onboarding.index ? "current" : index < onboarding.index ? "done" : "";
       return `<span class="onboarding-dot ${cls}"></span>`;
     }).join("");
   }
@@ -5901,8 +6088,7 @@ function renderOnboardingStep() {
   const next = $("#onboardingNextBtn");
   if (next) {
     if (step === "welcome") next.textContent = "Get started";
-    else if (step === "account")
-      next.textContent = state.account?.username ? "Next" : "Skip for now";
+    else if (step === "account") next.textContent = state.account?.username ? "Next" : "Skip for now";
     else if (step === "done") next.textContent = "Finish";
     else next.textContent = "Next";
   }

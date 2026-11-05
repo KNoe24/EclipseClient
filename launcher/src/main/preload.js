@@ -98,6 +98,10 @@ contextBridge.exposeInMainWorld("launcherAPI", {
     },
   },
 
+  pvphq: {
+    getStats: (player = "") => ipcRenderer.invoke("pvphq:getStats", player),
+  },
+
   launcher: {
     launch: (profileId) => ipcRenderer.invoke("launcher:launch", profileId),
     isRunning: (profileId = null) => ipcRenderer.invoke("launcher:isRunning", profileId),

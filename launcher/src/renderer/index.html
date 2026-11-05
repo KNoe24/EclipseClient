@@ -105,11 +105,7 @@
         <section id="home-tab-home" class="home-subpage active" data-home-page="home">
           <div id="homeWidgetBoard" class="home-widget-board" aria-live="polite"></div>
 
-          <aside
-            id="homeCustomizePanel"
-            class="home-customize-panel mcsection hidden"
-            aria-label="Customize home"
-          >
+          <aside id="homeCustomizePanel" class="home-customize-panel mcsection hidden" aria-label="Customize home">
             <div class="home-customize-head">
               <p class="mct whitetext">Home widgets</p>
               <p class="mcr home-customize-sub">
@@ -306,8 +302,7 @@
           <div class="settings-row">
             <div>
               <p class="settings-row-title whitetext mct">
-                Data Folder
-                <span id="settingsPortableBadge" class="portable-badge mcr hidden">Portable</span>
+                Data Folder <span id="settingsPortableBadge" class="portable-badge mcr hidden">Portable</span>
               </p>
               <p class="settings-row-desc whitetext mcr">
                 <span id="settingsDataDir">Loading...</span><br />
@@ -367,8 +362,8 @@
           <div class="dev-warning" role="alert">
             <p class="dev-warning-title mct">Developer screen</p>
             <p class="dev-warning-text mcr">
-              These tools are for testing only. Use them with responsibility: they can sign you out,
-              reset your layout, or put the launcher into states regular users never see.
+              These tools are for testing only. Use them with responsibility: they can sign you
+              out, reset your layout, or put the launcher into states regular users never see.
             </p>
           </div>
 
@@ -406,49 +401,33 @@
           <div class="settings-row">
             <div>
               <p class="settings-row-title whitetext mct">Replay Welcome Animation</p>
-              <p class="settings-row-desc whitetext mcr">
-                Plays the login animation for the current account.
-              </p>
+              <p class="settings-row-desc whitetext mcr">Plays the login animation for the current account.</p>
             </div>
-            <button id="devReplayWelcomeBtn" class="mcbtn mcr settings-row-btn" type="button">
-              Play
-            </button>
+            <button id="devReplayWelcomeBtn" class="mcbtn mcr settings-row-btn" type="button">Play</button>
           </div>
 
           <div class="settings-row">
             <div>
               <p class="settings-row-title whitetext mct">Reset First-Start Setup</p>
-              <p class="settings-row-desc whitetext mcr">
-                The welcome setup shows again on the next start.
-              </p>
+              <p class="settings-row-desc whitetext mcr">The welcome setup shows again on the next start.</p>
             </div>
-            <button id="devResetOnboardingBtn" class="mcbtn mcr settings-row-btn" type="button">
-              Reset
-            </button>
+            <button id="devResetOnboardingBtn" class="mcbtn mcr settings-row-btn" type="button">Reset</button>
           </div>
 
           <div class="settings-row">
             <div>
               <p class="settings-row-title whitetext mct">Reset Home Widgets</p>
-              <p class="settings-row-desc whitetext mcr">
-                Restores the default widgets, order and options.
-              </p>
+              <p class="settings-row-desc whitetext mcr">Restores the default widgets, order and options.</p>
             </div>
-            <button id="devResetWidgetsBtn" class="mcbtn mcr settings-row-btn" type="button">
-              Reset
-            </button>
+            <button id="devResetWidgetsBtn" class="mcbtn mcr settings-row-btn" type="button">Reset</button>
           </div>
 
           <div class="settings-row">
             <div>
               <p class="settings-row-title whitetext mct">Reload Launcher UI</p>
-              <p class="settings-row-desc whitetext mcr">
-                Reloads the window. Running games keep running.
-              </p>
+              <p class="settings-row-desc whitetext mcr">Reloads the window. Running games keep running.</p>
             </div>
-            <button id="devReloadUiBtn" class="mcbtn mcr settings-row-btn" type="button">
-              Reload
-            </button>
+            <button id="devReloadUiBtn" class="mcbtn mcr settings-row-btn" type="button">Reload</button>
           </div>
 
           <div class="settings-row">
@@ -456,9 +435,7 @@
               <p class="settings-row-title whitetext mct">Running Instances</p>
               <p id="devInstancesText" class="settings-row-desc whitetext mcr">None.</p>
             </div>
-            <button id="devStopAllBtn" class="mcbtn mcr settings-row-btn danger" type="button">
-              Stop all
-            </button>
+            <button id="devStopAllBtn" class="mcbtn mcr settings-row-btn danger" type="button">Stop all</button>
           </div>
 
           <p class="whitetext mct">Test Controls</p>
@@ -799,12 +776,7 @@
 
     <template id="mcSelectTemplate">
       <div class="mc-select">
-        <button
-          class="mc-select-button mcr"
-          type="button"
-          aria-haspopup="listbox"
-          aria-expanded="false"
-        >
+        <button class="mc-select-button mcr" type="button" aria-haspopup="listbox" aria-expanded="false">
           <span class="mc-select-label"></span>
           <span class="mc-select-arrow" aria-hidden="true"></span>
         </button>
@@ -832,22 +804,10 @@
           <span class="home-widget-grip" aria-hidden="true">⋮⋮</span>
           <span class="home-widget-title mct whitetext"></span>
           <span class="home-widget-tools">
-            <button
-              class="home-widget-tool"
-              data-widget-action="settings"
-              type="button"
-              title="Widget options"
-            >
+            <button class="home-widget-tool" data-widget-action="settings" type="button" title="Widget options">
               <img src="./static/img/settings.svg" alt="Options" />
             </button>
-            <button
-              class="home-widget-tool"
-              data-widget-action="hide"
-              type="button"
-              title="Hide widget"
-            >
-              ×
-            </button>
+            <button class="home-widget-tool" data-widget-action="hide" type="button" title="Hide widget">×</button>
           </span>
         </header>
         <div class="home-widget-body"></div>
@@ -860,12 +820,8 @@
           <span class="home-widget-grip" aria-hidden="true">⋮⋮</span>
           <span class="home-widget-row-name mct whitetext"></span>
           <span class="home-widget-row-arrows">
-            <button class="home-widget-tool" data-row-action="up" type="button" title="Move up">
-              ▲
-            </button>
-            <button class="home-widget-tool" data-row-action="down" type="button" title="Move down">
-              ▼
-            </button>
+            <button class="home-widget-tool" data-row-action="up" type="button" title="Move up">▲</button>
+            <button class="home-widget-tool" data-row-action="down" type="button" title="Move down">▼</button>
           </span>
           <button class="home-widget-tool" data-row-action="settings" type="button" title="Options">
             <img src="./static/img/settings.svg" alt="Options" />
@@ -893,9 +849,7 @@
           </thead>
           <tbody data-slot="rows"></tbody>
         </table>
-        <p class="widget-empty mcr hidden" data-slot="empty">
-          No servers yet. Add some in Customize.
-        </p>
+        <p class="widget-empty mcr hidden" data-slot="empty">No servers yet. Add some in Customize.</p>
       </div>
     </template>
 
@@ -913,9 +867,7 @@
     <template id="widget-settings-tpl-servers">
       <div class="widget-settings">
         <div class="widget-server-editor" data-slot="serverEditor"></div>
-        <button class="mcbtn mcr widget-settings-btn" data-action="add-server" type="button">
-          Add server
-        </button>
+        <button class="mcbtn mcr widget-settings-btn" data-action="add-server" type="button">Add server</button>
       </div>
     </template>
 
@@ -923,9 +875,7 @@
       <div class="widget-server-editor-row">
         <input class="editor-input" data-field="name" placeholder="Name" maxlength="32" />
         <input class="editor-input" data-field="ip" placeholder="play.example.com" maxlength="80" />
-        <button class="home-widget-tool" data-action="remove-server" type="button" title="Remove">
-          ×
-        </button>
+        <button class="home-widget-tool" data-action="remove-server" type="button" title="Remove">×</button>
       </div>
     </template>
 
@@ -952,6 +902,88 @@
         <label class="widget-check">
           <input type="checkbox" data-setting="showMotd" />
           <span class="mcr">Show server message (MOTD)</span>
+        </label>
+      </div>
+    </template>
+
+    <template id="widget-tpl-pvphq">
+      <div class="widget-pvphq">
+        <div class="widget-pvphq-top" data-slot="top">
+          <span class="widget-pvphq-tier mct" data-slot="tier">…</span>
+          <span class="widget-pvphq-ident">
+            <span class="widget-pvphq-ladder mct whitetext" data-slot="ladder"></span>
+            <span class="widget-pvphq-player mcr" data-slot="player"></span>
+          </span>
+          <span class="widget-pvphq-position mct" data-slot="position"></span>
+        </div>
+        <div class="widget-pvphq-stats" data-slot="stats"></div>
+        <div class="widget-pvphq-chips" data-slot="chips"></div>
+        <p class="widget-pvphq-footer mcr" data-slot="footer"></p>
+        <p class="widget-empty mcr hidden" data-slot="message"></p>
+      </div>
+    </template>
+
+    <template id="widget-row-tpl-pvphq-stat">
+      <div class="widget-pvphq-stat">
+        <span class="widget-pvphq-stat-label mcr" data-slot="label"></span>
+        <span class="widget-pvphq-stat-value mct whitetext" data-slot="value"></span>
+      </div>
+    </template>
+
+    <template id="widget-row-tpl-pvphq-chip">
+      <span class="widget-pvphq-chip mcr">
+        <span data-slot="name"></span>
+        <span class="mct" data-slot="tier"></span>
+      </span>
+    </template>
+
+    <template id="widget-settings-tpl-pvphq">
+      <div class="widget-settings">
+        <label class="widget-field">
+          <span class="mcr">Player</span>
+          <input class="editor-input" data-setting="player" maxlength="36" placeholder="Leave empty for your account" />
+        </label>
+        <label class="widget-field">
+          <span class="mcr">Ladder</span>
+          <select data-setting="ladder">
+            <option value="best">Best ladder</option>
+            <option value="global">Global overview</option>
+            <option value="SWORD">Sword</option>
+            <option value="AXE">Axe</option>
+            <option value="UHC">UHC</option>
+            <option value="VANILLA">Vanilla</option>
+            <option value="MACE">Mace</option>
+            <option value="SPEAR_MACE">Spear Mace</option>
+            <option value="CART">Cart</option>
+            <option value="POT">Pot</option>
+            <option value="NETHERITE_POT">NethPot</option>
+            <option value="SMP">SMP</option>
+            <option value="DIAMOND_SMP">DiamondSMP</option>
+          </select>
+        </label>
+        <label class="widget-check">
+          <input type="checkbox" data-setting="showElo" />
+          <span class="mcr">Elo</span>
+        </label>
+        <label class="widget-check">
+          <input type="checkbox" data-setting="showTr" />
+          <span class="mcr">TR</span>
+        </label>
+        <label class="widget-check">
+          <input type="checkbox" data-setting="showPeak" />
+          <span class="mcr">Peak Elo</span>
+        </label>
+        <label class="widget-check">
+          <input type="checkbox" data-setting="showRecord" />
+          <span class="mcr">Wins / losses</span>
+        </label>
+        <label class="widget-check">
+          <input type="checkbox" data-setting="showPosition" />
+          <span class="mcr">Leaderboard position</span>
+        </label>
+        <label class="widget-check">
+          <input type="checkbox" data-setting="showGlobal" />
+          <span class="mcr">Global rank</span>
         </label>
       </div>
     </template>
@@ -1017,9 +1049,7 @@
           <span class="mcr widget-muted">Latest snapshot</span>
           <span class="mct whitetext widget-mcupdate-version" data-slot="snapshot">…</span>
         </div>
-        <button class="mcbtn mcr widget-action-btn" data-action="mc-news" type="button">
-          Read the news
-        </button>
+        <button class="mcbtn mcr widget-action-btn" data-action="mc-news" type="button">Read the news</button>
       </div>
     </template>
 
@@ -1045,14 +1075,8 @@
         </div>
         <p class="mcr widget-small" data-slot="clientStatus"></p>
         <div class="widget-button-row">
-          <button class="mcbtn mcr widget-action-btn" data-action="check-updates" type="button">
-            Check
-          </button>
-          <button
-            class="mcbtn mcr widget-action-btn green hidden"
-            data-action="install-update"
-            type="button"
-          >
+          <button class="mcbtn mcr widget-action-btn" data-action="check-updates" type="button">Check</button>
+          <button class="mcbtn mcr widget-action-btn green hidden" data-action="install-update" type="button">
             Restart &amp; update
           </button>
         </div>
@@ -1117,14 +1141,11 @@
 
     <div id="welcomeOverlay" class="welcome-overlay hidden" aria-live="polite">
       <div class="welcome-card">
-        <img
-          id="welcomeHead"
-          class="welcome-head"
-          src="./static/img/default_logged_out_head.png"
-          alt=""
-        />
+        <img id="welcomeHead" class="welcome-head" src="./static/img/default_logged_out_head.png" alt="" />
         <p class="welcome-kicker mcr">Signed in</p>
-        <p class="welcome-title mct whitetext">Welcome, <span id="welcomeName">Player</span></p>
+        <p class="welcome-title mct whitetext">
+          Welcome, <span id="welcomeName">Player</span>
+        </p>
         <div class="welcome-bar"><span></span></div>
       </div>
     </div>
@@ -1142,29 +1163,19 @@
       </div>
     </template>
 
-    <div
-      id="onboardingBackdrop"
-      class="onboarding-backdrop hidden"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="onboardingTitle"
-    >
+    <div id="onboardingBackdrop" class="onboarding-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="onboardingTitle">
       <div class="onboarding-dialog mcsection">
         <div class="onboarding-top">
           <p class="onboarding-step-count mcr" id="onboardingStepCount">Step 1 of 5</p>
-          <button id="onboardingSkipBtn" class="onboarding-skip mcr" type="button">
-            Skip setup
-          </button>
+          <button id="onboardingSkipBtn" class="onboarding-skip mcr" type="button">Skip setup</button>
         </div>
 
         <section class="onboarding-step active" data-onboarding-step="welcome">
           <img class="onboarding-hero-icon" src="./static/img/rocket.svg" alt="" />
-          <h2 id="onboardingTitle" class="onboarding-title mct whitetext">
-            Welcome to Eclipse Client
-          </h2>
+          <h2 id="onboardingTitle" class="onboarding-title mct whitetext">Welcome to Eclipse Client</h2>
           <p class="onboarding-text mcr">
-            A quick setup gets you signed in, picks the installation you want to play, and sets how
-            the launcher behaves. It takes under a minute.
+            A quick setup gets you signed in, picks the installation you want to play, and sets
+            how the launcher behaves. It takes under a minute.
           </p>
         </section>
 
@@ -1176,17 +1187,10 @@
           </p>
 
           <div class="onboarding-account">
-            <img
-              id="onboardingAccountHead"
-              class="onboarding-account-head"
-              src="./static/img/default_logged_out_head.png"
-              alt=""
-            />
+            <img id="onboardingAccountHead" class="onboarding-account-head" src="./static/img/default_logged_out_head.png" alt="" />
             <div class="onboarding-account-text">
               <p id="onboardingAccountName" class="mct whitetext">Not signed in</p>
-              <p id="onboardingAccountSub" class="mcr">
-                You can also do this later from the sidebar.
-              </p>
+              <p id="onboardingAccountSub" class="mcr">You can also do this later from the sidebar.</p>
             </div>
           </div>
 
@@ -1207,9 +1211,7 @@
 
         <section class="onboarding-step" data-onboarding-step="preferences">
           <h2 class="onboarding-title mct whitetext">Launcher behaviour</h2>
-          <p class="onboarding-text mcr">
-            Click a row to toggle it. You can change these in Settings.
-          </p>
+          <p class="onboarding-text mcr">Click a row to toggle it. You can change these in Settings.</p>
 
           <label class="settings-row settings-row-toggle onboarding-row">
             <div>
