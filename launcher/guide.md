@@ -118,7 +118,60 @@ This builds the installer and the portable exe, checks that `version` in `packag
 
 Settings → Updates has two separate switches:
 
-- **Auto-update Launcher**: start-up check, background download and install-on-close for the launcher (installer and portable).
+- **Auto-update Launcher**: start-up check for the launcher (installer and portable). When an update is out you get a popup: **Yes** downloads it with a green progress bar and restarts into the new version, **No** skips that version until you press Check now.
 - **Auto-update Client**: the start-up sync of the Default installation's client files.
 
 With a switch off nothing happens automatically; **Check now** in Settings (or Check in the Launcher update widget) still checks and offers the update.
+
+## 5. Shared Folders
+
+Settings → Shared Folders → **Manage** opens the shared folders menu:
+
+- Turn sharing on/off for everything, or per folder (`saves`, `resourcepacks`, `shaderpacks`,
+  `screenshots`, `schematics`, `replay_recordings`).
+- Click a folder's name to rename it. **Add folder** shares any other game folder by name
+  (e.g. `XaeroWorldMap`); added folders can be removed again.
+- **Change** moves the whole shared location, **Choose folder** points one folder somewhere else
+  (e.g. your old `.minecraft/saves`).
+- Files already in an installation are moved into the shared folder; a name clash is kept as
+  `Name (installation)`. Nothing is deleted. Removing or turning off a folder leaves its files
+  in the shared folder.
+
+Per installation: installation editor → **Shared files** tab. Turn off "Use shared folders" or
+single folders to give that installation its own folder. You can copy the shared files in or
+start empty.
+
+Each installation's folder is a link (a junction on Windows, no admin needed). Links are checked
+every time you press Start. Deleting an installation removes its links first, so shared worlds are
+never deleted, and the client updater's delete mode skips shared folders.
+
+## 6. Mods from Modrinth
+
+Installation editor → Mods → **Browse Modrinth** searches mods for that installation's version
+and loader. Before installing, it lists the required mods and lets you tick which to install.
+Mods you already have are recognised, even jars you added by hand (matched by file hash), and
+start unticked. The search box above the mod list filters installed mods.
+
+## 7. Modpacks
+
+Installations → **Modpack** searches Modrinth modpacks (or **Import .mrpack** for a file). Pick a
+version and a name: the launcher makes a new installation, installs the loader (Fabric and Quilt
+from their official servers, Forge/NeoForge from their official installers), downloads every
+file (checksums verified, only Modrinth-approved hosts) and copies the pack's configs. If
+something fails, the half-made installation is removed again.
+
+## 8. Share Codes
+
+Installation editor → **Share** makes one long text code with the installation's version, loader,
+memory/arguments, `options.txt` (video, controls, sound), optionally the `config` folder, and the
+list of mods. Mods are identified on Modrinth by file hash, so the same versions are downloaded.
+Mods that aren't on Modrinth are listed so you can send them separately.
+
+Installations → **Import code** → paste → a new installation is made with the same settings and
+mods.
+
+## 9. Baby Mode
+
+Developer panel (↑↑↓↓←→←→ Enter) → **Baby Mode** hides everything technical (console, changelog,
+Java paths, arguments, version JSON tools, shared folders, update switches, technical widgets)
+and uses plainer words. Settings shows a "Baby Mode is on" switch to turn it off again.

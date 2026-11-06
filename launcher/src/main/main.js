@@ -10,6 +10,9 @@ const authService = require("./services/auth");
 const pvphqService = require("./services/pvphq");
 const javaRuntimeService = require("./services/javaRuntime");
 const settingsService = require("./services/settings");
+const sharedFoldersService = require("./services/sharedFolders");
+const modpacksService = require("./services/modpacks");
+const profileShareService = require("./services/profileShare");
 const launcherService = require("./services/launcher");
 const profileService = require("./services/profiles");
 const modsService = require("./services/mods");
@@ -925,6 +928,12 @@ app.whenReady().then(async () => {
       platform: process.platform,
       portable: storage.isPortable(),
       dataDir: storage.getRootDir(),
+      logsDir: storage.ensureDir(path.join(storage.getRootDir(), "logs")),
+      electron: process.versions.electron,
+      chrome: process.versions.chrome,
+      node: process.versions.node,
+      arch: process.arch,
+      executable: process.env.PORTABLE_EXECUTABLE_FILE || process.execPath,
     };
   });
 
@@ -946,6 +955,18 @@ app.whenReady().then(async () => {
     }
 
     return pvphqService.getStats(query);
+  });
+
+  ipcMain.handle("auth:listAccounts", async () => {
+    return authService.listAccounts();
+  });
+
+  ipcMain.handle("auth:switchAccount", async (_event, uuid) => {
+    return authService.switchAccount(String(uuid || ""));
+  });
+
+  ipcMain.handle("auth:removeAccount", async (_event, uuid) => {
+    return authService.removeAccount(String(uuid || ""));
   });
 
   ipcMain.handle("auth:loginOffline", async (_event, username) => {
@@ -1061,6 +1082,7 @@ app.whenReady().then(async () => {
     const resolvedGameDir = gameDir ? path.resolve(gameDir) : "";
 
     const result = await profileService.deleteProfile(id);
+    sharedFoldersService.forgetProfile(id);
 
     const selected = await profileService.getSelectedProfile();
     await discordService.setLauncherActivity(selected?.name || "Launcher");
@@ -1091,6 +1113,8 @@ app.whenReady().then(async () => {
           skippedGameDirDeleteReason = "Folder is still used by another installation.";
         } else {
           try {
+            sharedFoldersService.detachAll(resolvedGameDir);
+
             await fsp.rm(resolvedGameDir, {
               recursive: true,
               force: true,
@@ -1205,6 +1229,71 @@ app.whenReady().then(async () => {
     return modsService.addMods(profileId, result.filePaths);
   });
 
+  ipcMain.handle("mods:searchModrinth", async (_event, profileId, options = {}) => {
+    return modsService.searchModrinth(profileId, options || {});
+  });
+
+  ipcMain.handle("modpacks:search", async (_event, options = {}) => {
+    return modpacksService.searchModpacks(options || {});
+  });
+
+  ipcMain.handle("modpacks:versions", async (_event, projectId) => {
+    return modpacksService.listModpackVersions(projectId);
+  });
+
+  ipcMain.handle("modpacks:pickFile", async () => {
+    const result = await dialog.showOpenDialog(mainWindow, {
+      title: "Choose a Modrinth modpack",
+      filters: [{ name: "Modrinth modpack", extensions: ["mrpack"] }],
+      properties: ["openFile"],
+    });
+
+    if (result.canceled || !result.filePaths[0]) return null;
+    return result.filePaths[0];
+  });
+
+  ipcMain.handle("modpacks:install", async (event, source = {}) => {
+    const send = (data) => {
+      if (!event.sender.isDestroyed()) event.sender.send("modpacks:progress", data);
+    };
+
+    const result = await modpacksService.installModpack(
+      {
+        versionId: source?.versionId ? String(source.versionId) : "",
+        filePath: source?.filePath ? String(source.filePath) : "",
+        name: source?.name ? String(source.name) : "",
+      },
+      send
+    );
+
+    await discordService.setLauncherActivity(result.profile?.name || "Launcher");
+    return result;
+  });
+
+  ipcMain.handle("share:export", async (_event, profileId, options = {}) => {
+    return profileShareService.exportProfile(String(profileId || ""), options || {});
+  });
+
+  ipcMain.handle("share:preview", async (_event, code) => {
+    return profileShareService.previewCode(String(code || ""));
+  });
+
+  ipcMain.handle("share:import", async (event, code, options = {}) => {
+    const send = (data) => {
+      if (!event.sender.isDestroyed()) event.sender.send("share:progress", data);
+    };
+
+    return profileShareService.importCode(String(code || ""), options || {}, send);
+  });
+
+  ipcMain.handle("mods:modrinthPlan", async (_event, profileId, projectId) => {
+    return modsService.getModrinthInstallPlan(profileId, projectId);
+  });
+
+  ipcMain.handle("mods:installModrinth", async (_event, profileId, projectId, options = {}) => {
+    return modsService.installModrinthProject(profileId, projectId, options || {});
+  });
+
   ipcMain.handle("mods:remove", async (_event, profileId, filename) => {
     return modsService.removeMod(profileId, filename);
   });
@@ -1307,6 +1396,21 @@ app.whenReady().then(async () => {
     return updaterService.check({ manual: true });
   });
 
+  ipcMain.handle("dev:openDevTools", async () => {
+    mainWindow?.webContents.openDevTools({ mode: "detach" });
+    return { ok: true };
+  });
+
+  ipcMain.handle("dev:relaunch", async () => {
+    app.relaunch(
+      process.env.PORTABLE_EXECUTABLE_FILE
+        ? { execPath: process.env.PORTABLE_EXECUTABLE_FILE }
+        : undefined
+    );
+    app.quit();
+    return { ok: true };
+  });
+
   ipcMain.handle("settings:get", async () => {
     return settingsService.getSettings();
   });
@@ -1319,6 +1423,131 @@ app.whenReady().then(async () => {
     }
 
     return updated;
+  });
+
+  const applySharedFoldersToAll = async () => {
+    const data = await profileService.listProfiles();
+    const profiles = Array.isArray(data?.profiles) ? data.profiles : [];
+    const seen = new Set();
+    const logs = [];
+    const errors = [];
+    let skipped = 0;
+
+    for (const profile of profiles) {
+      if (!profile.gameDir) continue;
+
+      const key = path.resolve(profile.gameDir).toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+
+      if (launcherService.isRunning(profile.id)) {
+        skipped += 1;
+        continue;
+      }
+
+      const result = sharedFoldersService.applyToGameDir(profile.gameDir, {
+        profileId: profile.id,
+      });
+      result.logs.forEach((line) => logs.push(`${profile.name}: ${line}`));
+      result.errors.forEach((line) => errors.push(`${profile.name}: ${line}`));
+    }
+
+    return { logs, errors, skipped };
+  };
+
+  ipcMain.handle("sharedFolders:get", async () => {
+    return sharedFoldersService.getState();
+  });
+
+  ipcMain.handle("sharedFolders:update", async (_event, patch = {}) => {
+    const state = sharedFoldersService.updateConfig(patch || {});
+    const applied = await applySharedFoldersToAll();
+    return { ...state, applied };
+  });
+
+  ipcMain.handle("sharedFolders:choose", async (_event, folderId = "") => {
+    const isRoot = !folderId;
+    const current = sharedFoldersService.getState();
+    const folder = current.folders.find((item) => item.id === folderId);
+
+    if (!isRoot && !folder) {
+      throw new Error("Unknown shared folder.");
+    }
+
+    const result = await dialog.showOpenDialog(mainWindow, {
+      title: isRoot ? "Choose the shared folder location" : `Choose a folder for ${folder.label}`,
+      defaultPath: isRoot ? current.root : folder.path,
+      properties: ["openDirectory", "createDirectory"],
+    });
+
+    if (result.canceled || !result.filePaths[0]) {
+      return { canceled: true, ...current };
+    }
+
+    const patch = isRoot
+      ? { root: result.filePaths[0] }
+      : { folder: { id: folderId, path: result.filePaths[0] } };
+
+    const state = sharedFoldersService.updateConfig(patch);
+    const applied = await applySharedFoldersToAll();
+    return { ...state, applied };
+  });
+
+  ipcMain.handle("sharedFolders:add", async (_event, name, label = "") => {
+    const state = sharedFoldersService.addFolder(name, label);
+    const applied = await applySharedFoldersToAll();
+    return { ...state, applied };
+  });
+
+  ipcMain.handle("sharedFolders:remove", async (_event, folderId) => {
+    const data = await profileService.listProfiles();
+    const profiles = Array.isArray(data?.profiles) ? data.profiles : [];
+    const busy = profiles.find((profile) => launcherService.isRunning(profile.id));
+
+    if (busy) {
+      throw new Error(`Close ${busy.name} before removing a shared folder.`);
+    }
+
+    const logs = [];
+
+    for (const profile of profiles) {
+      sharedFoldersService
+        .detachFolder(profile.gameDir, folderId)
+        .forEach((line) => logs.push(`${profile.name}: ${line}`));
+    }
+
+    const state = sharedFoldersService.removeFolder(folderId);
+    return { ...state, applied: { logs, errors: [], skipped: 0 } };
+  });
+
+  ipcMain.handle("sharedFolders:getProfile", async (_event, profileId) => {
+    return sharedFoldersService.getProfileState(String(profileId || ""));
+  });
+
+  ipcMain.handle(
+    "sharedFolders:setProfile",
+    async (_event, profileId, patch = {}, options = {}) => {
+      const profile = await profileService.getProfileById(String(profileId || ""));
+
+      if (launcherService.isRunning(profile.id)) {
+        throw new Error("Close this installation before changing its folders.");
+      }
+
+      const state = sharedFoldersService.setProfileSettings(profile.id, patch || {});
+      const result = sharedFoldersService.applyToGameDir(profile.gameDir, {
+        profileId: profile.id,
+        copyOnDetach: Boolean(options?.copy),
+      });
+
+      return { ...state, applied: { logs: result.logs, errors: result.errors, skipped: 0 } };
+    }
+  );
+
+  ipcMain.handle("sharedFolders:reset", async (_event, folderId = "") => {
+    const patch = folderId ? { folder: { id: folderId, path: "" } } : { root: "" };
+    const state = sharedFoldersService.updateConfig(patch);
+    const applied = await applySharedFoldersToAll();
+    return { ...state, applied };
   });
 
   ipcMain.handle("updater:download", async () => {

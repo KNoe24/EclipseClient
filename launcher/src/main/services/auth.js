@@ -3,6 +3,8 @@ const { Auth, wrapError } = require("msmc");
 const storage = require("./storage");
 
 const ACCOUNT_FILE = "account.json";
+const ACCOUNTS_FILE = "accounts.json";
+const REFRESH_MARGIN_MS = 10 * 60 * 1000;
 
 const LICENSE_FILE = "license.json";
 const OFFLINE_NAME_PATTERN = /^[A-Za-z0-9_]{3,16}$/;
@@ -175,7 +177,7 @@ async function runMicrosoftLogin() {
   const mclcAuth = getMclcAuth(minecraftToken);
   const account = normalizeMclcAuth(mclcAuth);
 
-  storage.writeJson(ACCOUNT_FILE, account);
+  saveActiveAccount(account);
   recordVerifiedOwnership(account);
 
   console.log("[auth] Login saved for:", account.username);
@@ -284,7 +286,7 @@ async function loginOffline(username) {
     savedAt: new Date().toISOString(),
   };
 
-  storage.writeJson(ACCOUNT_FILE, account);
+  saveActiveAccount(account);
 
   console.log("[auth] Offline account saved for:", name);
 
@@ -373,7 +375,148 @@ function getLaunchAuth() {
   };
 }
 
+function readAccounts() {
+  const saved = storage.readJson(ACCOUNTS_FILE, null);
+
+  if (saved && Array.isArray(saved.accounts)) {
+    return saved.accounts.filter((account) => account && account.uuid && account.username);
+  }
+
+  const active = storage.readJson(ACCOUNT_FILE, null);
+  const accounts = active && active.uuid && active.username ? [active] : [];
+
+  storage.writeJson(ACCOUNTS_FILE, { accounts });
+  return accounts;
+}
+
+function writeAccounts(accounts) {
+  storage.writeJson(ACCOUNTS_FILE, { accounts });
+}
+
+function sameAccount(a, b) {
+  return (
+    String(a?.uuid || "")
+      .replace(/-/g, "")
+      .toLowerCase() ===
+    String(b?.uuid || "")
+      .replace(/-/g, "")
+      .toLowerCase()
+  );
+}
+
+function saveActiveAccount(account) {
+  const accounts = readAccounts().filter((item) => !sameAccount(item, account));
+
+  accounts.unshift(account);
+  writeAccounts(accounts);
+  storage.writeJson(ACCOUNT_FILE, account);
+}
+
+function tokenExpired(account) {
+  const exp = Number(account?.meta?.exp || 0);
+  return account?.type !== "offline" && exp > 0 && Date.now() > exp - REFRESH_MARGIN_MS;
+}
+
+async function refreshAccount(account) {
+  if (account?.type === "offline" || !tokenExpired(account)) {
+    return account;
+  }
+
+  const refreshToken = account?.meta?.refresh;
+
+  if (!refreshToken) {
+    const error = new Error(
+      `The session for ${account.username} expired. Sign in with Microsoft again.`
+    );
+    error.code = "SESSION_EXPIRED";
+    throw error;
+  }
+
+  try {
+    const authManager = new Auth("select_account");
+    const xboxManager = await authManager.refresh(refreshToken);
+    const minecraftToken = await retryAsync(
+      "Minecraft Services refresh",
+      () => xboxManager.getMinecraft(),
+      3,
+      2000
+    );
+
+    return normalizeMclcAuth(getMclcAuth(minecraftToken));
+  } catch (error) {
+    console.error("[auth] Refresh failed:", error);
+
+    const wrapped = new Error(
+      `The session for ${account.username} expired and could not be renewed. Sign in with Microsoft again.`
+    );
+    wrapped.code = "SESSION_EXPIRED";
+    throw wrapped;
+  }
+}
+
+async function refreshActiveAccountIfNeeded() {
+  const active = storage.readJson(ACCOUNT_FILE, null);
+  if (!active || !tokenExpired(active)) return active;
+
+  const refreshed = await refreshAccount(active);
+  saveActiveAccount(refreshed);
+  console.log("[auth] Session renewed for:", refreshed.username);
+
+  return refreshed;
+}
+
+function listAccounts() {
+  const active = storage.readJson(ACCOUNT_FILE, null);
+
+  return readAccounts().map((account) => ({
+    ...safeAccount(account),
+    active: Boolean(active) && sameAccount(active, account),
+    expired: tokenExpired(account) && !account?.meta?.refresh,
+  }));
+}
+
+async function switchAccount(uuid) {
+  const target = readAccounts().find((account) => sameAccount(account, { uuid }));
+
+  if (!target) {
+    return { ok: false, error: "That account is no longer saved." };
+  }
+
+  try {
+    const fresh = await refreshAccount(target);
+    saveActiveAccount(fresh);
+
+    return { ok: true, account: safeAccount(fresh) };
+  } catch (error) {
+    return {
+      ok: false,
+      needsLogin: error.code === "SESSION_EXPIRED",
+      error: error.message || String(error),
+    };
+  }
+}
+
+function removeAccount(uuid) {
+  const accounts = readAccounts();
+  const remaining = accounts.filter((account) => !sameAccount(account, { uuid }));
+  const active = storage.readJson(ACCOUNT_FILE, null);
+
+  writeAccounts(remaining);
+
+  if (active && sameAccount(active, { uuid })) {
+    storage.writeJson(ACCOUNT_FILE, remaining[0] || null);
+  }
+
+  return { ok: true, account: safeAccount(storage.readJson(ACCOUNT_FILE, null)) };
+}
+
 async function logout() {
+  const active = storage.readJson(ACCOUNT_FILE, null);
+
+  if (active?.uuid) {
+    return removeAccount(active.uuid);
+  }
+
   storage.writeJson(ACCOUNT_FILE, null);
 
   return {
@@ -382,6 +525,10 @@ async function logout() {
 }
 
 module.exports = {
+  listAccounts,
+  switchAccount,
+  removeAccount,
+  refreshActiveAccountIfNeeded,
   loginMicrosoft,
   loginOffline,
   getOfflineEligibility,

@@ -186,7 +186,13 @@ function normalizeProfilesData(data) {
   };
 }
 
-const PROFILE_PATH_FIELDS = ["gameDir", "javaPath", "customVersionJsonPath", "iconPath"];
+const PROFILE_PATH_FIELDS = [
+  "gameDir",
+  "javaPath",
+  "customVersionJsonPath",
+  "iconPath",
+  "forgeInstallerPath",
+];
 
 function mapProfilePaths(profile, mapper) {
   const mapped = { ...profile };
@@ -583,6 +589,7 @@ async function createProfile(profile = {}) {
     extraMcArgs: profile.extraMcArgs || "",
     icon: profile.icon || "grass",
     iconPath: profile.iconPath || "",
+    forgeInstallerPath: profile.forgeInstallerPath || "",
     createdAt: now,
     updatedAt: now,
   };
@@ -624,6 +631,7 @@ async function updateProfile(profileId, patch = {}) {
     "extraMcArgs",
     "icon",
     "iconPath",
+    "forgeInstallerPath",
   ];
 
   for (const key of allowed) {

@@ -508,7 +508,84 @@ function initHomeTabs() {
   });
 }
 
+const SIMPLE_MODE_KEY = "launcher.simpleMode";
+const SIMPLE_MODE_HIDDEN_PAGES = new Set(["console", "changelog"]);
+
+function isSimpleMode() {
+  return document.body.classList.contains("simple-mode");
+}
+
+function applySimpleModeTexts(on) {
+  $$("[data-simple]").forEach((element) => {
+    if (on) {
+      if (element.dataset.normalText === undefined)
+        element.dataset.normalText = element.textContent;
+      element.textContent = element.dataset.simple;
+    } else if (element.dataset.normalText !== undefined) {
+      element.textContent = element.dataset.normalText;
+      delete element.dataset.normalText;
+    }
+  });
+}
+
+function setSimpleMode(on, options = {}) {
+  const enabled = Boolean(on);
+
+  document.body.classList.toggle("simple-mode", enabled);
+  applySimpleModeTexts(enabled);
+
+  try {
+    localStorage.setItem(SIMPLE_MODE_KEY, enabled ? "true" : "false");
+  } catch {}
+
+  const devToggle = $("#devSimpleMode");
+  if (devToggle) devToggle.checked = enabled;
+
+  const exitToggle = $("#settingSimpleModeExit");
+  if (exitToggle) exitToggle.checked = true;
+
+  if (enabled && SIMPLE_MODE_HIDDEN_PAGES.has(state.currentPage)) {
+    showPage("home");
+  }
+
+  if (enabled && state.installationEditor?.tab === "folders") {
+    showEditorTab("settings");
+  }
+
+  if (!options.silent && typeof renderHomeWidgets === "function" && homeWidgets?.config) {
+    renderHomeWidgets();
+  }
+
+  if (!options.silent) {
+    setStatus(
+      enabled ? "Baby Mode on: only the basics are shown." : "Baby Mode off: all options are back."
+    );
+  }
+}
+
+function initSimpleMode() {
+  let saved = false;
+
+  try {
+    saved = localStorage.getItem(SIMPLE_MODE_KEY) === "true";
+  } catch {}
+
+  setSimpleMode(saved, { silent: true });
+
+  $("#devSimpleMode")?.addEventListener("change", (event) => {
+    setSimpleMode(event.target.checked);
+  });
+
+  $("#settingSimpleModeExit")?.addEventListener("change", (event) => {
+    if (!event.target.checked) setSimpleMode(false);
+  });
+}
+
 function showPage(name) {
+  if (isSimpleMode() && SIMPLE_MODE_HIDDEN_PAGES.has(name)) {
+    name = "home";
+  }
+
   state.currentPage = name;
 
   $$(".page").forEach((page) => page.classList.remove("active"));
@@ -1340,6 +1417,10 @@ function ensureEditorExtraControls() {
     </div>
   `;
 
+  versionLabel.dataset.advanced = "";
+  customJsonTools.dataset.advanced = "";
+  javaLabel.dataset.advanced = "";
+
   grid.insertBefore(javaLabel, grid.firstChild);
   grid.insertBefore(customJsonTools, grid.firstChild);
   grid.insertBefore(versionLabel, grid.firstChild);
@@ -1354,6 +1435,10 @@ function openInstallationEditor(profileId) {
 
   const backdrop = $("#installationEditorBackdrop");
   if (backdrop) backdrop.classList.remove("hidden");
+
+  const modsSearch = $("#editorModsSearch");
+  if (modsSearch) modsSearch.value = "";
+  setEditorFoldersNote("");
 
   showEditorTab("settings");
   fillEditorSettings();
@@ -1385,6 +1470,10 @@ function showEditorTab(tab) {
 
   if (tab === "mods") {
     renderEditorMods();
+  }
+
+  if (tab === "folders") {
+    renderEditorFolders();
   }
 }
 
@@ -1845,12 +1934,14 @@ async function renderEditorMods() {
 
     if (!mods || mods.length === 0) {
       root.innerHTML = `<div class="whitetext mcr">No mods installed for this installation.</div>`;
+      applyEditorModsFilter();
       return;
     }
 
     for (const mod of mods) {
       const row = document.createElement("div");
       row.className = `editor-mod-row ${mod.enabled ? "" : "disabled"}`;
+      row.dataset.search = `${mod.displayName || ""} ${mod.filename || ""}`.toLowerCase();
 
       row.innerHTML = `
         <div class="editor-mod-name mcr">
@@ -1901,9 +1992,45 @@ async function renderEditorMods() {
     }
 
     root.replaceChildren(fragment);
+    applyEditorModsFilter();
     restoreScroll();
   } catch (error) {
     root.innerHTML = `<div class="whitetext mcr">Failed to load mods.</div>`;
+  }
+}
+
+function applyEditorModsFilter() {
+  const root = $("#editorModsList");
+  const count = $("#editorModsCount");
+  if (!root) return;
+
+  const query = ($("#editorModsSearch")?.value || "").trim().toLowerCase();
+  const terms = query.split(/\s+/).filter(Boolean);
+  const rows = [...root.querySelectorAll(".editor-mod-row")];
+  let shown = 0;
+
+  for (const row of rows) {
+    const match = terms.every((term) => row.dataset.search.includes(term));
+    row.classList.toggle("filtered-out", !match);
+    if (match) shown += 1;
+  }
+
+  root.querySelector(".editor-mods-no-match")?.remove();
+
+  if (terms.length && rows.length && shown === 0) {
+    const empty = document.createElement("div");
+    empty.className = "editor-mods-no-match whitetext mcr";
+    empty.textContent = `No installed mods match "${query}".`;
+    root.appendChild(empty);
+  }
+
+  if (count) {
+    const enabled = rows.filter((row) => !row.classList.contains("disabled")).length;
+    count.textContent = !rows.length
+      ? ""
+      : terms.length
+        ? `${shown} of ${rows.length}`
+        : `${rows.length} mods · ${enabled} on`;
   }
 }
 
@@ -3547,7 +3674,10 @@ function hideLaunchProgress() {
   }
 }
 
+let launchProgressHideTimer = null;
+
 function startFakeLaunchProgress() {
+  clearTimeout(launchProgressHideTimer);
   hideLaunchProgress();
 
   let value = 4;
@@ -3560,11 +3690,17 @@ function startFakeLaunchProgress() {
 }
 
 function finishLaunchProgress() {
+  if (launchProgressTimer) {
+    clearInterval(launchProgressTimer);
+    launchProgressTimer = null;
+  }
+
   setLaunchProgress(100);
 
-  setTimeout(() => {
+  clearTimeout(launchProgressHideTimer);
+  launchProgressHideTimer = setTimeout(() => {
     hideLaunchProgress();
-  }, 700);
+  }, 1000);
 }
 
 function ensureClientUpdateOverlay() {
@@ -3590,6 +3726,7 @@ function ensureClientUpdateOverlay() {
 
 function showClientUpdateOverlay(message = "Preparing update...") {
   ensureClientUpdateOverlay();
+  clearTimeout(clientUpdateHideTimer);
 
   const overlay = $("#clientUpdateOverlay");
   const messageElement = $("#clientUpdateOverlayMessage");
@@ -3603,7 +3740,21 @@ function showClientUpdateOverlay(message = "Preparing update...") {
   }
 }
 
+let clientUpdateHideTimer = null;
+
+function finishClientUpdateOverlay() {
+  clientUpdateProgressValue = 100;
+  setClientUpdateOverlayProgress(100);
+
+  clearTimeout(clientUpdateHideTimer);
+  clientUpdateHideTimer = setTimeout(() => {
+    hideClientUpdateOverlay();
+  }, 1000);
+}
+
 function hideClientUpdateOverlay() {
+  clearTimeout(clientUpdateHideTimer);
+
   const overlay = $("#clientUpdateOverlay");
 
   if (overlay) {
@@ -3846,6 +3997,15 @@ async function initEvents() {
     });
   }
 
+  $("#editorModsSearch")?.addEventListener("input", applyEditorModsFilter);
+  $("#editorModsSearch")?.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && event.target.value) {
+      event.stopPropagation();
+      event.target.value = "";
+      applyEditorModsFilter();
+    }
+  });
+
   const addEditorModsBtn = $("#addEditorModsBtn");
   if (addEditorModsBtn) {
     addEditorModsBtn.addEventListener("click", async () => {
@@ -3901,19 +4061,19 @@ async function initEvents() {
   const logoutBtn = $("#logoutBtn");
   if (logoutBtn) {
     logoutBtn.addEventListener("click", async () => {
+      const previous = state.account?.username || "";
+
       await window.launcherAPI.auth.logout();
-      await loadAccount();
+      const active = await loadAccount();
 
-      state.skins.loaded = false;
-      state.skins.minecraftProfile = null;
-      remountWidget("skin");
+      onAccountChanged(active);
 
-      if ($("#home-tab-skin")?.classList.contains("active")) {
-        renderSkinLoginRequired($("#home-tab-skin"));
-      }
-
-      setStatus("Logged out.");
-      appendConsole("[auth] Logged out.");
+      setStatus(
+        active?.username
+          ? `Logged out of ${previous}. Now using ${active.username}.`
+          : "Logged out."
+      );
+      appendConsole(`[auth] Logged out${previous ? ` of ${previous}` : ""}.`);
     });
   }
 
@@ -3975,7 +4135,7 @@ async function initEvents() {
         setStatus(`Launching ${selectedProfile.name}...`);
         appendConsole(`[launcher] Launching ${selectedProfile.name}...`);
 
-        if (launcherSettings.openConsoleOnLaunch) {
+        if (launcherSettings.openConsoleOnLaunch && !isSimpleMode()) {
           setTimeout(() => {
             showPage("console");
           }, 650);
@@ -4205,6 +4365,8 @@ async function initEvents() {
       refreshWidget("launcherupdate");
     }
 
+    handleLauncherUpdateStatus(data);
+
     const downloadBtn = $("#downloadUpdateBtn");
     const installBtn = $("#installUpdateBtn");
 
@@ -4292,11 +4454,7 @@ async function initEvents() {
     }
 
     if (data.type === "done") {
-      setClientUpdateOverlayProgress(100);
-
-      setTimeout(() => {
-        hideClientUpdateOverlay();
-      }, 700);
+      finishClientUpdateOverlay();
 
       setStatus(message);
       appendConsole(`[client updater] ${message}`);
@@ -4682,7 +4840,7 @@ const HOME_WIDGET_DEFS = {
     weight: 1,
     defaults: () => ({
       player: "",
-      ladder: "best",
+      ladder: "global",
       showElo: true,
       showTr: true,
       showPeak: false,
@@ -4815,8 +4973,13 @@ function widgetSettings(id) {
   return homeWidgets.config.settings[id];
 }
 
+const SIMPLE_MODE_HIDDEN_WIDGETS = new Set(["console", "mcupdate", "launcherupdate", "players"]);
+
 function enabledWidgetIds() {
-  return homeWidgets.config.order.filter((id) => homeWidgets.config.enabled[id]);
+  return homeWidgets.config.order.filter(
+    (id) =>
+      homeWidgets.config.enabled[id] && !(isSimpleMode() && SIMPLE_MODE_HIDDEN_WIDGETS.has(id))
+  );
 }
 
 function cloneTemplate(id) {
@@ -5202,7 +5365,7 @@ const WIDGET_RENDERERS = {
 
     draw(body, settings, { loading, result, error, stale }) {
       const message = slot(body, "message");
-      const parts = ["top", "stats", "chips", "footer"].map((name) => slot(body, name));
+      const parts = ["top", "stats", "winrate", "chips", "footer"].map((name) => slot(body, name));
 
       const showMessage = (text) => {
         message.textContent = text;
@@ -5224,51 +5387,92 @@ const WIDGET_RENDERERS = {
       message.classList.add("hidden");
       parts.forEach((part) => part.classList.remove("hidden"));
 
-      const playerName = result.name || state.account?.username || "";
       const stats = slot(body, "stats");
       const chips = slot(body, "chips");
-      const tier = slot(body, "tier");
-      const position = slot(body, "position");
-
       stats.innerHTML = "";
       chips.innerHTML = "";
 
-      const addStat = (label, value) => {
-        const row = cloneTemplate("widget-row-tpl-pvphq-stat");
-        slot(row, "label").textContent = label;
-        slot(row, "value").textContent = value;
-        stats.appendChild(row);
+      const tierBadge = (ladder) => {
+        const pair = cloneTemplate("widget-row-tpl-pvphq-tier");
+        const badge = slot(pair, "tier");
+
+        badge.textContent =
+          ladder.tier ||
+          (ladder.placed ? "—" : `${ladder.placementGames}/${ladder.placementTarget}`);
+
+        if (ladder.tierColor) {
+          badge.style.background = ladder.tierColor;
+          badge.style.color = "#111";
+        } else {
+          badge.classList.add("unranked");
+        }
+
+        slot(pair, "kit").textContent = ladder.name;
+        return pair;
       };
 
-      const record = (wins, losses) => {
+      const addFact = (label, value) => {
+        const fact = cloneTemplate("widget-row-tpl-pvphq-stat");
+        const valueSlot = slot(fact, "value");
+
+        if (value instanceof Node) valueSlot.appendChild(value);
+        else valueSlot.textContent = value;
+
+        slot(fact, "label").textContent = label;
+        stats.appendChild(fact);
+      };
+
+      const drawWinrate = (wins, losses) => {
         const games = wins + losses;
-        const rate = games > 0 ? Math.round((wins / games) * 100) : 0;
-        return `${formatPlayerNumber(wins)}W ${formatPlayerNumber(losses)}L · ${rate}%`;
+        const rate = games > 0 ? (wins / games) * 100 : 0;
+        const bar = slot(body, "winbar");
+        const filled = Math.round(rate / 5);
+
+        bar.innerHTML = "";
+        for (let index = 0; index < 20; index += 1) {
+          const segment = document.createElement("span");
+          segment.className = index < filled ? "on" : "";
+          bar.appendChild(segment);
+        }
+
+        slot(body, "winrateValue").textContent = `${rate.toFixed(1)}%`;
+        slot(body, "wins").textContent = `${formatPlayerNumber(wins)} W`;
+        slot(body, "losses").textContent = `${formatPlayerNumber(losses)} L`;
+        slot(body, "winrate").classList.toggle("hidden", !settings.showRecord || games === 0);
       };
 
-      slot(body, "player").textContent = playerName;
+      slot(body, "name").textContent = result.name || state.account?.username || "Player";
 
       if (settings.ladder === "global") {
-        tier.textContent = result.globalRank || "Unranked";
-        tier.style.color = "";
-        slot(body, "ladder").textContent = "Global";
-        position.textContent =
-          settings.showPosition && result.globalPosition
-            ? `#${formatPlayerNumber(result.globalPosition)}`
-            : "";
+        const best = result.ladders[0];
+        const position = result.overallRank || result.globalPosition;
 
-        addStat("Games", formatPlayerNumber(result.games));
-        if (settings.showRecord) addStat("Record", record(result.wins, result.losses));
-        addStat("Ladders", String(result.ladders.length));
+        slot(body, "sub").textContent = [result.globalRank && `Global ${result.globalRank}`]
+          .filter(Boolean)
+          .join(" · ");
 
-        for (const ladder of result.ladders.slice(0, 8)) {
-          const chip = cloneTemplate("widget-row-tpl-pvphq-chip");
-          slot(chip, "name").textContent = ladder.name;
-          slot(chip, "tier").textContent =
-            ladder.tier ||
-            (ladder.placed ? "Unranked" : `${ladder.placementGames}/${ladder.placementTarget}`);
-          slot(chip, "tier").style.color = ladder.tierColor || "";
-          chips.appendChild(chip);
+        if (result.overallPoints) {
+          slot(body, "score").textContent = formatPlayerNumber(result.overallPoints);
+          slot(body, "scoreLabel").textContent =
+            `Total points${position && settings.showPosition ? ` · #${formatPlayerNumber(position)} overall` : ""}`;
+        } else {
+          slot(body, "score").textContent =
+            settings.showPosition && position ? `#${formatPlayerNumber(position)}` : "";
+          slot(body, "scoreLabel").textContent =
+            settings.showPosition && position ? "Global position" : "";
+        }
+
+        addFact(
+          "Kits ranked",
+          `${result.kitsRanked ?? result.ladders.filter((l) => l.placed).length} / ${result.totalLadders || 11}`
+        );
+        addFact("Matches", formatPlayerNumber(result.games));
+        if (best) addFact("Best", tierBadge(best));
+
+        drawWinrate(result.wins, result.losses);
+
+        for (const ladder of result.ladders.slice(0, 11)) {
+          chips.appendChild(tierBadge(ladder));
         }
 
         slot(body, "footer").textContent = stale || "";
@@ -5287,34 +5491,32 @@ const WIDGET_RENDERERS = {
             ?.content.querySelector(`option[value="${settings.ladder}"]`)?.textContent ||
           settings.ladder;
 
-        return showMessage(`${playerName || "This player"} has no ranked ${ladderName} games yet.`);
-      }
-
-      tier.textContent = ladder.tier || (ladder.placed ? "Unranked" : "Placements");
-      tier.style.color = ladder.tierColor || "";
-      slot(body, "ladder").textContent = ladder.name;
-      position.textContent =
-        settings.showPosition && ladder.position ? `#${formatPlayerNumber(ladder.position)}` : "";
-
-      if (!ladder.placed)
-        addStat("Placements", `${ladder.placementGames}/${ladder.placementTarget}`);
-      if (settings.showElo) addStat("Elo", formatPlayerNumber(ladder.rating));
-      if (settings.showTr) addStat("TR", formatPlayerNumber(ladder.tr));
-      if (settings.showPeak) addStat("Peak", formatPlayerNumber(ladder.peak));
-      if (settings.showRecord) addStat("Record", record(ladder.wins, ladder.losses));
-
-      const footer = [];
-
-      if (settings.showGlobal && (result.globalRank || result.globalPosition)) {
-        footer.push(
-          `Global ${result.globalRank || ""}${
-            result.globalPosition ? ` #${formatPlayerNumber(result.globalPosition)}` : ""
-          }`
-            .replace(/\s+/g, " ")
-            .trim()
+        return showMessage(
+          `${result.name || "This player"} has no ranked ${ladderName} games yet.`
         );
       }
 
+      slot(body, "sub").textContent =
+        `${ladder.name}${result.globalRank && settings.showGlobal ? ` · Global ${result.globalRank}` : ""}`;
+      slot(body, "score").textContent =
+        settings.showPosition && ladder.position ? `#${formatPlayerNumber(ladder.position)}` : "";
+      slot(body, "scoreLabel").textContent =
+        settings.showPosition && ladder.position ? `${ladder.name} position` : "";
+
+      addFact("Tier", tierBadge({ ...ladder, name: "" }));
+      if (!ladder.placed)
+        addFact("Placements", `${ladder.placementGames}/${ladder.placementTarget}`);
+      if (settings.showElo) addFact("Elo", formatPlayerNumber(ladder.rating));
+      if (settings.showTr) addFact("TR", formatPlayerNumber(ladder.tr));
+      if (settings.showPeak) addFact("Peak", formatPlayerNumber(ladder.peak));
+      addFact("Matches", formatPlayerNumber(ladder.games));
+
+      drawWinrate(ladder.wins, ladder.losses);
+
+      const footer = [];
+      if (settings.showGlobal && result.globalPosition) {
+        footer.push(`Global #${formatPlayerNumber(result.globalPosition)}`);
+      }
       if (stale) footer.push(stale);
 
       slot(body, "footer").textContent = footer.join(" · ");
@@ -5419,7 +5621,7 @@ const WIDGET_RENDERERS = {
     mount(body, settings) {
       body.querySelector('[data-action="check-updates"]')?.addEventListener("click", async () => {
         slot(body, "launcherStatus").textContent = "Checking...";
-        await window.launcherAPI.updater.check();
+        await checkLauncherUpdateManually();
         await checkDefaultClientInfoManually({ manual: true });
         this.update(body, settings);
       });
@@ -5451,7 +5653,7 @@ const WIDGET_RENDERERS = {
 
       const launcherText = {
         checking: "Checking for updates...",
-        available: `Update ${launcher.info?.version || ""} available, downloading...`,
+        available: `Update ${launcher.info?.version || ""} available.`,
         "not-available": "Up to date.",
         "download-progress": `Downloading update: ${Math.round(launcher.progress?.percent || 0)}%`,
         downloaded: "Update ready. Restart to install.",
@@ -6028,6 +6230,71 @@ function renderDeveloperInstances() {
           .join(" · ");
 }
 
+async function renderDeveloperVersions() {
+  const list = $("#devVersionList");
+  if (!list) return;
+
+  let info = homeWidgets.appInfo;
+
+  try {
+    info = await window.launcherAPI.system.getAppInfo();
+    homeWidgets.appInfo = info;
+  } catch {
+    info = info || {};
+  }
+
+  const client = state.clientUpdateInfo || {};
+  const account = state.account;
+
+  const values = {
+    launcher: info.version ? `v${info.version}` : "unknown",
+    client: client.localClientVersion
+      ? `v${client.localClientVersion}${client.updateAvailable ? ` (v${client.remoteClientVersion} available)` : ""}`
+      : client.remoteClientVersion
+        ? `not installed (latest v${client.remoteClientVersion})`
+        : "unknown",
+    build: `${info.packaged ? "packaged" : "development"}${info.portable ? ", portable" : ""}`,
+    electron: info.electron || "?",
+    chrome: info.chrome || "?",
+    node: info.node || "?",
+    system: `${info.platform || "?"} ${info.arch || ""}`.trim(),
+    account: account?.username
+      ? `${account.username} (${account.type || "microsoft"})`
+      : "not signed in",
+    dataDir: info.dataDir || "?",
+    executable: info.executable || "?",
+  };
+
+  list.querySelectorAll("[data-info]").forEach((cell) => {
+    cell.textContent = values[cell.dataset.info] ?? "?";
+    cell.title = cell.textContent;
+  });
+
+  return values;
+}
+
+async function copyDiagnostics() {
+  const values = (await renderDeveloperVersions()) || {};
+  const lines = consoleStore.buffers.get(CONSOLE_VIEW_ALL) || [];
+
+  const text = [
+    "Eclipse Launcher diagnostics",
+    `Generated: ${new Date().toISOString()}`,
+    ...Object.entries(values).map(([key, value]) => `${key}: ${value}`),
+    `Running instances: ${(state.runningInstances || []).length}`,
+    "",
+    "Last console lines:",
+    ...lines.slice(-200),
+  ].join("\n");
+
+  try {
+    await navigator.clipboard.writeText(text);
+    setStatus("Diagnostics copied to the clipboard.");
+  } catch {
+    showAlert(text, { title: "Diagnostics (copy manually)" });
+  }
+}
+
 async function openDeveloperScreen() {
   if (state.currentPage !== "developer") {
     pageBeforeDeveloper = state.currentPage || "home";
@@ -6035,6 +6302,7 @@ async function openDeveloperScreen() {
 
   showPage("developer");
   renderDeveloperInstances();
+  renderDeveloperVersions();
 
   const button = $("#devOfflineLoginBtn");
   const input = $("#devOfflineName");
@@ -6150,6 +6418,58 @@ function initDeveloperScreen() {
     saveHomeWidgetConfig();
     renderHomeWidgets();
     setStatus("Home widgets reset.");
+  });
+
+  $("#devCopyDiagnosticsBtn")?.addEventListener("click", copyDiagnostics);
+
+  $("#devOpenDevToolsBtn")?.addEventListener("click", () => window.launcherAPI.dev.openDevTools());
+
+  $("#devOpenDataBtn")?.addEventListener("click", () => {
+    if (homeWidgets.appInfo?.dataDir)
+      window.launcherAPI.folders.openPath(homeWidgets.appInfo.dataDir);
+  });
+
+  $("#devOpenLogsBtn")?.addEventListener("click", () => {
+    if (homeWidgets.appInfo?.logsDir)
+      window.launcherAPI.folders.openPath(homeWidgets.appInfo.logsDir);
+  });
+
+  $("#devPreviewUpdateBtn")?.addEventListener("click", () => {
+    const current = homeWidgets.appInfo?.version || "1.0.0";
+    const parts = current.split(".").map((part) => Number(part) || 0);
+    parts[parts.length - 1] += 1;
+
+    showLauncherUpdatePrompt("ask", { version: parts.join("."), currentVersion: current });
+  });
+
+  $("#devTestDialogsBtn")?.addEventListener("click", async () => {
+    await showAlert("This is an info message.", { title: "Info dialog" });
+    await showError("Error invoking remote method 'test:thing': Error: This is an error message.");
+    const answer = await showConfirm("Do you like the new dialogs?", {
+      title: "Confirm dialog",
+      confirmText: "Yes",
+      cancelText: "No",
+    });
+    setStatus(`Confirm dialog answered: ${answer ? "Yes" : "No"}.`);
+  });
+
+  $("#devRefreshWidgetsBtn")?.addEventListener("click", () => {
+    homeWidgets.serverStatusCache.clear();
+    homeWidgets.pvphqResults.clear();
+    homeWidgets.latestVersions = null;
+
+    for (const id of Array.from(homeWidgets.mounted.keys())) remountWidget(id);
+    setStatus("Widgets refreshed.");
+  });
+
+  $("#devRelaunchBtn")?.addEventListener("click", async () => {
+    const restart = await showConfirm("Close and reopen the launcher now?", {
+      title: "Restart launcher",
+      confirmText: "Restart",
+      danger: true,
+    });
+
+    if (restart) window.launcherAPI.dev.relaunch();
   });
 
   $("#devReloadUiBtn")?.addEventListener("click", () => {
@@ -6410,7 +6730,7 @@ async function initUpdateSettings() {
     if (status) status.textContent = "Checking the launcher and the client...";
 
     try {
-      await window.launcherAPI.updater.check();
+      await checkLauncherUpdateManually();
       await checkDefaultClientInfoManually({ manual: true });
 
       const launcher = state.launcherUpdate || {};
@@ -6419,11 +6739,13 @@ async function initUpdateSettings() {
       const launcherText =
         launcher.type === "downloaded"
           ? "Launcher update ready. It installs when you close the launcher, or use Restart & update in the Launcher update widget."
-          : launcher.type === "available" || launcher.type === "download-progress"
-            ? "Launcher update downloading..."
-            : launcher.type === "error"
-              ? "Launcher update check failed (see Console)."
-              : launcher.message || "Launcher is up to date.";
+          : launcher.type === "available"
+            ? `Launcher update ${launcher.info?.version || ""} available.`
+            : launcher.type === "download-progress"
+              ? "Launcher update downloading..."
+              : launcher.type === "error"
+                ? "Launcher update check failed (see Console)."
+                : launcher.message || "Launcher is up to date.";
 
       const clientText = client.updateAvailable
         ? `Client update ${client.remoteClientVersion || ""} available.`
@@ -6450,6 +6772,461 @@ async function renderDataFolderSetting() {
     badge?.classList.toggle("hidden", !info.portable);
   } catch {
     if (pathText) pathText.textContent = "Unknown";
+  }
+}
+
+const sharedFoldersUi = {
+  state: null,
+  busy: false,
+  open: false,
+};
+
+function setSharedFoldersStatus(text, isError = false) {
+  const status = $("#sharedFoldersStatus");
+  if (!status) return;
+  status.textContent = text || "";
+  status.classList.toggle("error", Boolean(isError));
+}
+
+function describeSharedApplied(applied) {
+  if (!applied) return { text: "", error: false };
+
+  (applied.logs || []).forEach((line) => appendConsole(`[shared] ${line}`));
+  (applied.errors || []).forEach((line) => appendConsole(`[shared] ${line}`));
+
+  const parts = [];
+
+  if (applied.errors?.length) {
+    parts.push(`Some folders could not be linked:\n${applied.errors.join("\n")}`);
+  }
+
+  if (applied.skipped) {
+    parts.push(
+      `${applied.skipped} running installation${applied.skipped === 1 ? "" : "s"} will be updated on next launch.`
+    );
+  }
+
+  return { text: parts.join("\n"), error: Boolean(applied.errors?.length) };
+}
+
+function reportSharedFoldersApplied(applied) {
+  const { text, error } = describeSharedApplied(applied);
+  setSharedFoldersStatus(text, error);
+}
+
+function renderSharedFoldersSummary() {
+  const summary = $("#sharedFoldersSummary");
+  const state = sharedFoldersUi.state;
+  if (!summary || !state) return;
+
+  if (!state.enabled) {
+    summary.textContent = "Off. Every installation has its own folders.";
+    return;
+  }
+
+  const on = state.folders.filter((folder) => folder.enabled).map((folder) => folder.label);
+  summary.textContent = on.length
+    ? `Sharing: ${on.join(", ")}`
+    : "On, but no folders are selected.";
+}
+
+function renderSharedFolders() {
+  renderSharedFoldersSummary();
+
+  const state = sharedFoldersUi.state;
+  const list = $("#sharedFoldersList");
+  const template = $("#sharedFolderRowTemplate");
+  if (!state || !list || !template) return;
+
+  const toggle = $("#settingSharedFolders");
+  if (toggle) {
+    toggle.checked = Boolean(state.enabled);
+    toggle.disabled = sharedFoldersUi.busy;
+  }
+
+  const root = $("#sharedFoldersRoot");
+  if (root) root.textContent = state.root;
+
+  $("#sharedFoldersResetRootBtn")?.classList.toggle("hidden", !state.customRoot);
+  ["#sharedFoldersChooseRootBtn", "#sharedFoldersResetRootBtn", "#sharedFoldersAddBtn"].forEach(
+    (selector) => {
+      const button = $(selector);
+      if (button) button.disabled = sharedFoldersUi.busy;
+    }
+  );
+
+  list.classList.toggle("off", !state.enabled);
+
+  const focusedId = document.activeElement?.closest?.(".shared-folder-row")?.dataset.folder;
+  const fragment = document.createDocumentFragment();
+
+  for (const folder of state.folders) {
+    const row = template.content.firstElementChild.cloneNode(true);
+    const input = row.querySelector('input[type="checkbox"]');
+    const label = row.querySelector('[data-field="label"]');
+
+    row.dataset.folder = folder.id;
+    row.classList.toggle("disabled-folder", !folder.enabled);
+
+    label.value = folder.label;
+    row.querySelector('[data-field="id"]').textContent = `/${folder.id}`;
+    row.querySelector('[data-field="custom"]').classList.toggle("hidden", !folder.custom);
+    row.querySelector('[data-field="description"]').textContent = folder.description;
+    row.querySelector('[data-field="path"]').textContent = folder.path;
+    row.querySelector('[data-action="reset"]').classList.toggle("hidden", !folder.customPath);
+    row.querySelector('[data-action="remove"]').classList.toggle("hidden", !folder.custom);
+
+    input.checked = folder.enabled;
+    input.disabled = sharedFoldersUi.busy;
+
+    input.addEventListener("change", () => {
+      updateSharedFolders({ folder: { id: folder.id, enabled: input.checked } });
+    });
+
+    const commitLabel = () => {
+      const value = label.value.trim();
+      if (!value) {
+        label.value = folder.label;
+        return;
+      }
+      if (value === folder.label) return;
+      updateSharedFolders({ folder: { id: folder.id, label: value } }, { quiet: true });
+    };
+
+    label.addEventListener("keydown", (event) => {
+      if (event.key === "Enter") {
+        event.preventDefault();
+        label.blur();
+      }
+      if (event.key === "Escape") {
+        event.stopPropagation();
+        label.value = folder.label;
+        label.blur();
+      }
+    });
+    label.addEventListener("blur", commitLabel);
+
+    row.addEventListener("click", (event) => {
+      if (event.target.closest("button, input, label.block-switch")) return;
+      if (input.disabled) return;
+      input.checked = !input.checked;
+      input.dispatchEvent(new Event("change"));
+    });
+
+    row.querySelectorAll("[data-action]").forEach((button) => {
+      button.disabled = sharedFoldersUi.busy;
+
+      button.addEventListener("click", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+
+        const action = button.dataset.action;
+
+        if (action === "open") openSharedFolderPath(folder.path);
+        if (action === "choose") chooseSharedFolder(folder.id);
+        if (action === "reset") resetSharedFolder(folder.id);
+        if (action === "remove") removeSharedFolder(folder);
+      });
+    });
+
+    fragment.appendChild(row);
+  }
+
+  list.replaceChildren(fragment);
+
+  if (focusedId) {
+    list
+      .querySelector(
+        `.shared-folder-row[data-folder="${CSS.escape(focusedId)}"] .shared-folder-label`
+      )
+      ?.focus();
+  }
+}
+
+async function runSharedFoldersAction(action, busyText, options = {}) {
+  if (sharedFoldersUi.busy) return false;
+
+  sharedFoldersUi.busy = true;
+  if (!options.quiet) setSharedFoldersStatus(busyText);
+  renderSharedFolders();
+
+  let success = false;
+
+  try {
+    const result = await action();
+
+    if (result && !result.canceled) {
+      sharedFoldersUi.state = result;
+      sharedFoldersUi.busy = false;
+      renderSharedFolders();
+      reportSharedFoldersApplied(result.applied);
+      return true;
+    }
+
+    if (result?.canceled) setSharedFoldersStatus("");
+  } catch (error) {
+    setSharedFoldersStatus(friendlyErrorMessage(error, "Could not update shared folders."), true);
+  }
+
+  sharedFoldersUi.busy = false;
+  renderSharedFolders();
+  return success;
+}
+
+function updateSharedFolders(patch, options = {}) {
+  return runSharedFoldersAction(
+    () => window.launcherAPI.sharedFolders.update(patch),
+    "Linking folders...",
+    options
+  );
+}
+
+function chooseSharedFolder(folderId = "") {
+  return runSharedFoldersAction(
+    () => window.launcherAPI.sharedFolders.choose(folderId),
+    "Choose a folder..."
+  );
+}
+
+function resetSharedFolder(folderId = "") {
+  return runSharedFoldersAction(
+    () => window.launcherAPI.sharedFolders.reset(folderId),
+    "Linking folders..."
+  );
+}
+
+async function removeSharedFolder(folder) {
+  const confirmed = await showConfirm(
+    `Stop sharing "${folder.label}" (/${folder.id})?\n\nEvery installation gets its own empty ${folder.id} folder again. The files stay in the shared folder.`,
+    { title: "Remove shared folder", confirmText: "Remove", danger: true }
+  );
+
+  if (!confirmed) return;
+
+  await runSharedFoldersAction(
+    () => window.launcherAPI.sharedFolders.remove(folder.id),
+    "Removing..."
+  );
+}
+
+async function addSharedFolder() {
+  const nameInput = $("#sharedFoldersAddName");
+  const labelInput = $("#sharedFoldersAddLabel");
+  const name = nameInput?.value.trim() || "";
+
+  if (!name) {
+    setSharedFoldersStatus("Type the folder name as it appears in the game folder.", true);
+    nameInput?.focus();
+    return;
+  }
+
+  const added = await runSharedFoldersAction(
+    () => window.launcherAPI.sharedFolders.add(name, labelInput?.value.trim() || ""),
+    "Adding folder..."
+  );
+
+  if (added) {
+    if (nameInput) nameInput.value = "";
+    if (labelInput) labelInput.value = "";
+    $("#sharedFoldersList")?.lastElementChild?.scrollIntoView({ block: "nearest" });
+  }
+}
+
+async function openSharedFolderPath(folderPath) {
+  try {
+    await window.launcherAPI.folders.openPath(folderPath);
+  } catch (error) {
+    showError(friendlyErrorMessage(error, "Could not open the folder."));
+  }
+}
+
+async function refreshSharedFoldersState() {
+  try {
+    sharedFoldersUi.state = await window.launcherAPI.sharedFolders.get();
+    renderSharedFolders();
+  } catch (error) {
+    setSharedFoldersStatus(friendlyErrorMessage(error, "Could not load shared folders."), true);
+  }
+}
+
+async function openSharedFoldersMenu() {
+  sharedFoldersUi.open = true;
+  setSharedFoldersStatus("");
+  $("#sharedFoldersBackdrop")?.classList.remove("hidden");
+  await refreshSharedFoldersState();
+}
+
+function closeSharedFoldersMenu() {
+  if (!sharedFoldersUi.open) return;
+
+  document.activeElement?.blur?.();
+  sharedFoldersUi.open = false;
+  $("#sharedFoldersBackdrop")?.classList.add("hidden");
+
+  if (state.installationEditor?.tab === "folders") {
+    renderEditorFolders();
+  }
+}
+
+async function initSharedFoldersSetting() {
+  if (!window.launcherAPI.sharedFolders) return;
+
+  $("#openSharedFoldersBtn")?.addEventListener("click", openSharedFoldersMenu);
+  $("#editorManageSharedBtn")?.addEventListener("click", openSharedFoldersMenu);
+  $("#sharedFoldersCloseBtn")?.addEventListener("click", closeSharedFoldersMenu);
+
+  $("#sharedFoldersBackdrop")?.addEventListener("click", (event) => {
+    if (event.target === event.currentTarget) closeSharedFoldersMenu();
+  });
+
+  $("#settingSharedFolders")?.addEventListener("change", (event) => {
+    updateSharedFolders({ enabled: event.target.checked });
+  });
+
+  $("#sharedFoldersChooseRootBtn")?.addEventListener("click", () => chooseSharedFolder(""));
+  $("#sharedFoldersResetRootBtn")?.addEventListener("click", () => resetSharedFolder(""));
+  $("#sharedFoldersOpenRootBtn")?.addEventListener("click", () => {
+    if (sharedFoldersUi.state?.root) openSharedFolderPath(sharedFoldersUi.state.root);
+  });
+
+  $("#sharedFoldersAddForm")?.addEventListener("submit", (event) => {
+    event.preventDefault();
+    addSharedFolder();
+  });
+
+  document.addEventListener(
+    "keydown",
+    (event) => {
+      if (!sharedFoldersUi.open || event.key !== "Escape") return;
+      if (!$("#appDialogBackdrop")?.classList.contains("hidden")) return;
+      if (mcSelectState.open) return;
+
+      event.stopPropagation();
+      closeSharedFoldersMenu();
+    },
+    true
+  );
+
+  $("#editorUseSharedFolders")?.addEventListener("change", (event) => {
+    setEditorFolders({ useShared: event.target.checked }, event.target);
+  });
+
+  await refreshSharedFoldersState();
+}
+
+const editorFoldersUi = {
+  busy: false,
+  requestId: 0,
+};
+
+function setEditorFoldersNote(text, isError = false) {
+  const note = $("#editorFoldersNote");
+  if (!note) return;
+  note.textContent = text || "";
+  note.classList.toggle("error", Boolean(isError));
+}
+
+function renderEditorFolderState(profileState) {
+  const list = $("#editorFoldersList");
+  const template = $("#editorFolderRowTemplate");
+  const master = $("#editorUseSharedFolders");
+  if (!list || !template || !profileState) return;
+
+  if (master) {
+    master.checked = profileState.useShared;
+    master.disabled = editorFoldersUi.busy;
+  }
+
+  list.classList.toggle("off", !profileState.useShared || !profileState.globalEnabled);
+
+  const fragment = document.createDocumentFragment();
+
+  for (const folder of profileState.folders) {
+    const row = template.content.firstElementChild.cloneNode(true);
+    const input = row.querySelector("input");
+
+    input.id = `editorFolderToggle-${folder.id}`;
+    row.htmlFor = input.id;
+    row.classList.toggle("inactive", !folder.active);
+
+    row.querySelector('[data-field="label"]').textContent = `${folder.label}  /${folder.id}`;
+
+    let sub;
+    if (!profileState.globalEnabled) sub = "Shared folders are turned off in Settings.";
+    else if (!folder.enabled) sub = "Not shared globally. Turn it on in Manage shared folders.";
+    else if (!profileState.useShared) sub = "Separate: this installation uses its own folder.";
+    else if (folder.shared) sub = `Shared: ${folder.path}`;
+    else sub = "Separate: this installation uses its own folder.";
+
+    row.querySelector('[data-field="sub"]').textContent = sub;
+
+    input.checked = folder.shared;
+    input.disabled = editorFoldersUi.busy || !profileState.useShared;
+
+    input.addEventListener("change", () => {
+      setEditorFolders({ folder: { id: folder.id, shared: input.checked } }, input);
+    });
+
+    fragment.appendChild(row);
+  }
+
+  list.replaceChildren(fragment);
+}
+
+async function renderEditorFolders() {
+  const profileId = state.installationEditor?.profileId;
+  const list = $("#editorFoldersList");
+  if (!list) return;
+
+  if (!profileId || !window.launcherAPI.sharedFolders?.getProfile) {
+    list.replaceChildren();
+    setEditorFoldersNote("Save this installation first to choose its folders.");
+    return;
+  }
+
+  const requestId = ++editorFoldersUi.requestId;
+
+  try {
+    const profileState = await window.launcherAPI.sharedFolders.getProfile(profileId);
+    if (requestId !== editorFoldersUi.requestId) return;
+    setEditorFoldersNote("");
+    renderEditorFolderState(profileState);
+  } catch (error) {
+    setEditorFoldersNote(friendlyErrorMessage(error, "Could not load folders."), true);
+  }
+}
+
+async function setEditorFolders(patch, control) {
+  const profileId = state.installationEditor?.profileId;
+  if (!profileId || editorFoldersUi.busy) return;
+
+  const goingSeparate =
+    patch.useShared === false || (patch.folder && patch.folder.shared === false);
+
+  let copy = false;
+
+  if (goingSeparate) {
+    copy = await showConfirm(
+      "This installation will get its own folder. Copy the shared files into it so it starts with the same worlds and packs, or start empty?",
+      { title: "Use separate folders", confirmText: "Copy files", cancelText: "Start empty" }
+    );
+  }
+
+  editorFoldersUi.busy = true;
+  setEditorFoldersNote(copy ? "Copying files..." : "Updating folders...");
+
+  try {
+    const result = await window.launcherAPI.sharedFolders.setProfile(profileId, patch, { copy });
+    editorFoldersUi.busy = false;
+    renderEditorFolderState(result);
+
+    const { text, error } = describeSharedApplied(result.applied);
+    setEditorFoldersNote(text, error);
+  } catch (error) {
+    editorFoldersUi.busy = false;
+    if (control) control.checked = !control.checked;
+    setEditorFoldersNote(friendlyErrorMessage(error, "Could not change folders."), true);
+    renderEditorFolders();
   }
 }
 
@@ -6600,7 +7377,7 @@ function showJavaInstallPrompt(profile, check) {
         progressText.textContent = `Java ${major} installed. Starting ${profile.name}...`;
         setStatus(`Java ${major} installed.`);
 
-        setTimeout(() => finish(true), 600);
+        setTimeout(() => finish(true), 1000);
       } catch (error) {
         installing = false;
         installBtn.disabled = false;
@@ -6654,7 +7431,1452 @@ function initJavaInstallProgress() {
   });
 }
 
+function onAccountChanged(account, options = {}) {
+  state.skins.loaded = false;
+  state.skins.minecraftProfile = null;
+  remountWidget("skin");
+  refreshWidget("pvphq");
+
+  if ($("#home-tab-skin")?.classList.contains("active")) {
+    loadSkinPageData(true);
+  }
+
+  if (options.welcome && account?.username) {
+    playWelcomeAnimation(account, { returning: true });
+  }
+}
+
+function closeAccountMenu() {
+  $("#accountMenu")?.classList.add("hidden");
+  $("#accountSwitchBtn")?.setAttribute("aria-expanded", "false");
+  $(".account-box")?.classList.remove("menu-open");
+}
+
+async function openAccountMenu() {
+  const menu = $("#accountMenu");
+  if (!menu) return;
+
+  let accounts = [];
+
+  try {
+    accounts = await window.launcherAPI.auth.listAccounts();
+  } catch (error) {
+    showError(error, { title: "Could not load accounts" });
+    return;
+  }
+
+  menu.innerHTML = "";
+
+  for (const account of accounts) {
+    const item = cloneTemplate("accountMenuItemTemplate");
+    const pick = item.querySelector('[data-action="pick"]');
+    const head = item.querySelector(".account-menu-head");
+
+    item.classList.toggle("active", account.active);
+    pick.classList.toggle("selected", account.active);
+    item.querySelector(".account-menu-name").textContent = account.username;
+    item.querySelector(".account-menu-sub").textContent =
+      account.type === "offline" ? "Offline" : account.expired ? "Sign in again" : "Microsoft";
+
+    if (account.type !== "offline" && account.uuid) {
+      head.onerror = () => {
+        head.onerror = null;
+        head.src = DEFAULT_PLAYER_HEAD;
+      };
+      head.src = playerFaceUrl(account.uuid);
+    }
+
+    pick.addEventListener("click", () => switchToAccount(account));
+    item
+      .querySelector('[data-action="remove"]')
+      .addEventListener("click", () => removeSavedAccount(account));
+
+    menu.appendChild(item);
+  }
+
+  const footer = cloneTemplate("accountMenuFooterTemplate");
+  footer.querySelector('[data-action="add"]').addEventListener("click", async () => {
+    closeAccountMenu();
+    await handleLogin();
+  });
+  menu.appendChild(footer);
+
+  menu.classList.remove("hidden");
+  $("#accountSwitchBtn")?.setAttribute("aria-expanded", "true");
+  $(".account-box")?.classList.add("menu-open");
+}
+
+async function switchToAccount(account) {
+  closeAccountMenu();
+
+  if (account.active) return;
+
+  setStatus(`Switching to ${account.username}...`);
+
+  const result = await window.launcherAPI.auth.switchAccount(account.uuid);
+
+  if (!result?.ok) {
+    if (result?.needsLogin) {
+      const signIn = await showConfirm(`${result.error}\n\nSign in now?`, {
+        title: "Session expired",
+        confirmText: "Sign in",
+      });
+
+      if (signIn) await handleLogin();
+      return;
+    }
+
+    showError(result?.error || "Could not switch account.", { title: "Switch failed" });
+    return;
+  }
+
+  const active = await loadAccount();
+  setStatus(`Switched to ${active?.username || account.username}.`);
+  appendConsole(`[auth] Switched to ${active?.username || account.username}.`);
+  onAccountChanged(active, { welcome: true });
+}
+
+async function removeSavedAccount(account) {
+  const confirmed = await showConfirm(
+    `Remove ${account.username} from this launcher?\n\nYou can add it again later by signing in.`,
+    { title: "Remove account", confirmText: "Remove", danger: true }
+  );
+
+  if (!confirmed) return;
+
+  await window.launcherAPI.auth.removeAccount(account.uuid);
+  const active = await loadAccount();
+
+  appendConsole(`[auth] Removed ${account.username}.`);
+  setStatus(active?.username ? `Now using ${active.username}.` : "Signed out.");
+  onAccountChanged(active);
+
+  if (!$("#accountMenu")?.classList.contains("hidden")) openAccountMenu();
+  else closeAccountMenu();
+}
+
+function initAccountSwitcher() {
+  $("#accountSwitchBtn")?.addEventListener("click", (event) => {
+    event.stopPropagation();
+
+    if ($("#accountMenu")?.classList.contains("hidden")) openAccountMenu();
+    else closeAccountMenu();
+  });
+
+  document.addEventListener("mousedown", (event) => {
+    if (!event.target.closest?.(".account-box")) closeAccountMenu();
+  });
+
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") closeAccountMenu();
+  });
+}
+
+const launcherUpdatePrompt = {
+  open: false,
+  mode: "ask",
+  version: "",
+  dismissedVersion: "",
+  manual: false,
+};
+
+function launcherUpdateEls() {
+  return {
+    backdrop: $("#launcherUpdateBackdrop"),
+    title: $("#launcherUpdateTitle"),
+    text: $("#launcherUpdateText"),
+    question: $("#launcherUpdateQuestion"),
+    progress: $("#launcherUpdateProgress"),
+    bar: $("#launcherUpdateBar"),
+    progressText: $("#launcherUpdateProgressText"),
+    error: $("#launcherUpdateError"),
+    yes: $("#launcherUpdateYesBtn"),
+    no: $("#launcherUpdateNoBtn"),
+  };
+}
+
+function setLauncherUpdateMode(mode, info = {}) {
+  const el = launcherUpdateEls();
+  const version = info.version || launcherUpdatePrompt.version || "";
+  const current = homeWidgets.appInfo?.version || info.currentVersion || "";
+
+  launcherUpdatePrompt.mode = mode;
+  launcherUpdatePrompt.version = version;
+
+  el.error.classList.add("hidden");
+  el.yes.disabled = false;
+  el.no.disabled = false;
+  el.no.classList.remove("hidden");
+
+  if (mode === "ask") {
+    el.title.textContent = "Update available";
+    el.text.textContent = `Eclipse Launcher ${version} is out${current ? ` (you have ${current})` : ""}.`;
+    el.question.textContent = "Would you like to update now?";
+    el.question.classList.remove("hidden");
+    el.progress.classList.add("hidden");
+    el.yes.textContent = "Yes, update";
+    el.no.textContent = "No";
+  }
+
+  if (mode === "ready") {
+    el.title.textContent = "Update ready";
+    el.text.textContent = `Eclipse Launcher ${version} is downloaded.`;
+    el.question.textContent = "Restart the launcher to install it now?";
+    el.question.classList.remove("hidden");
+    el.progress.classList.add("hidden");
+    el.yes.textContent = "Restart & update";
+    el.no.textContent = "Later";
+  }
+
+  if (mode === "downloading") {
+    el.title.textContent = `Updating to ${version}`;
+    el.text.textContent = "Downloading the update. The launcher restarts when it's done.";
+    el.question.classList.add("hidden");
+    el.progress.classList.remove("hidden");
+    el.bar.style.width = "0%";
+    el.progressText.textContent = "Starting download...";
+    el.yes.disabled = true;
+    el.no.disabled = true;
+    el.yes.textContent = "Updating...";
+  }
+
+  if (mode === "installing") {
+    el.title.textContent = `Installing ${version}`;
+    el.text.textContent = "The launcher will close and start again in a moment.";
+    el.question.classList.add("hidden");
+    el.progress.classList.remove("hidden");
+    el.bar.style.width = "100%";
+    el.progressText.textContent = "Download complete. Installing...";
+    el.yes.disabled = true;
+    el.no.classList.add("hidden");
+    el.yes.textContent = "Restarting...";
+  }
+}
+
+function showLauncherUpdatePrompt(mode, info) {
+  const el = launcherUpdateEls();
+  if (!el.backdrop) return;
+
+  launcherUpdatePrompt.open = true;
+  setLauncherUpdateMode(mode, info);
+  el.backdrop.classList.remove("hidden");
+  el.yes.focus();
+}
+
+function closeLauncherUpdatePrompt() {
+  launcherUpdatePrompt.open = false;
+  launcherUpdateEls().backdrop?.classList.add("hidden");
+}
+
+async function installLauncherUpdateNow() {
+  setLauncherUpdateMode("installing");
+  appendConsole(`[launcher updater] Installing ${launcherUpdatePrompt.version} and restarting.`);
+
+  setTimeout(() => {
+    window.launcherAPI.updater.install();
+  }, 1100);
+}
+
+function handleLauncherUpdateStatus(data) {
+  const type = data?.type;
+
+  if (type === "checking" || type === "manual-check-started") return;
+
+  if (type === "available") {
+    const version = data.info?.version || "";
+    const ask = launcherUpdatePrompt.manual || version !== launcherUpdatePrompt.dismissedVersion;
+
+    launcherUpdatePrompt.manual = false;
+
+    if (ask && !(launcherUpdatePrompt.open && launcherUpdatePrompt.mode !== "ask")) {
+      showLauncherUpdatePrompt("ask", data.info || {});
+    }
+
+    return;
+  }
+
+  if (type === "download-progress") {
+    if (!launcherUpdatePrompt.open || launcherUpdatePrompt.mode !== "downloading") return;
+
+    const el = launcherUpdateEls();
+    const progress = data.progress || {};
+    const percent = Math.max(0, Math.min(100, Math.round(progress.percent || 0)));
+
+    el.bar.style.width = `${percent}%`;
+    el.progressText.textContent = progress.total
+      ? `${formatMegabytes(progress.transferred)} of ${formatMegabytes(progress.total)} (${percent}%)`
+      : `${percent}%`;
+    return;
+  }
+
+  if (type === "downloaded") {
+    launcherUpdatePrompt.manual = false;
+
+    if (launcherUpdatePrompt.open && launcherUpdatePrompt.mode === "downloading") {
+      installLauncherUpdateNow();
+      return;
+    }
+
+    if (
+      data.info?.version !== launcherUpdatePrompt.dismissedVersion ||
+      launcherUpdatePrompt.manual
+    ) {
+      showLauncherUpdatePrompt("ready", data.info || {});
+    }
+
+    return;
+  }
+
+  if (
+    type === "error" &&
+    launcherUpdatePrompt.open &&
+    launcherUpdatePrompt.mode === "downloading"
+  ) {
+    const el = launcherUpdateEls();
+
+    setLauncherUpdateMode("ask");
+    el.title.textContent = "Update failed";
+    el.question.textContent = "Try again?";
+    el.yes.textContent = "Try again";
+    el.no.textContent = "Close";
+    el.error.textContent = friendlyErrorMessage(
+      data.message,
+      "The update could not be downloaded."
+    );
+    el.error.classList.remove("hidden");
+    return;
+  }
+
+  if (type === "not-available" || type === "error" || type === "disabled" || type === "dev-mode") {
+    launcherUpdatePrompt.manual = false;
+  }
+}
+
+function initLauncherUpdatePrompt() {
+  const el = launcherUpdateEls();
+
+  el.no?.addEventListener("click", () => {
+    launcherUpdatePrompt.dismissedVersion = launcherUpdatePrompt.version;
+    closeLauncherUpdatePrompt();
+    setStatus("Update skipped. Use Check for updates in Settings when you want it.");
+  });
+
+  el.yes?.addEventListener("click", async () => {
+    if (launcherUpdatePrompt.mode === "ready") {
+      installLauncherUpdateNow();
+      return;
+    }
+
+    setLauncherUpdateMode("downloading");
+    appendConsole(`[launcher updater] Downloading ${launcherUpdatePrompt.version}...`);
+
+    const result = await window.launcherAPI.updater.download();
+
+    if (result && result.ok === false && launcherUpdatePrompt.mode === "downloading") {
+      handleLauncherUpdateStatus({ type: "error", message: result.error });
+    }
+  });
+
+  document.addEventListener(
+    "keydown",
+    (event) => {
+      if (!launcherUpdatePrompt.open || event.key !== "Escape") return;
+      if (launcherUpdatePrompt.mode === "downloading" || launcherUpdatePrompt.mode === "installing")
+        return;
+
+      event.stopPropagation();
+      el.no?.click();
+    },
+    true
+  );
+}
+
+const modrinthBrowser = {
+  mode: "mods",
+  open: false,
+  profileId: "",
+  query: "",
+  sort: "relevance",
+  offset: 0,
+  limit: 20,
+  total: 0,
+  requestId: 0,
+  searchTimer: null,
+  installing: new Set(),
+  changed: false,
+};
+
+function formatCompactNumber(value) {
+  const number = Number(value) || 0;
+  if (number >= 1e9) return `${(number / 1e9).toFixed(1).replace(/\.0$/, "")}B`;
+  if (number >= 1e6) return `${(number / 1e6).toFixed(1).replace(/\.0$/, "")}M`;
+  if (number >= 1e3) return `${(number / 1e3).toFixed(1).replace(/\.0$/, "")}K`;
+  return String(number);
+}
+
+function setModrinthStatus(text, isError = false) {
+  const status = $("#modrinthStatus");
+  if (!status) return;
+  status.textContent = text || "";
+  status.classList.toggle("error", Boolean(isError));
+}
+
+function updateModrinthPager() {
+  const prev = $("#modrinthPrevBtn");
+  const next = $("#modrinthNextBtn");
+  const label = $("#modrinthPageLabel");
+  const pages = Math.max(1, Math.ceil(modrinthBrowser.total / modrinthBrowser.limit));
+  const page = Math.floor(modrinthBrowser.offset / modrinthBrowser.limit) + 1;
+
+  if (prev) prev.disabled = modrinthBrowser.offset <= 0;
+  if (next) next.disabled = modrinthBrowser.offset + modrinthBrowser.limit >= modrinthBrowser.total;
+  if (label) label.textContent = modrinthBrowser.total ? `Page ${page} of ${pages}` : "";
+}
+
+function setModrinthResultState(row, mode, text) {
+  const button = row.querySelector(".modrinth-install-btn");
+  const bar = row.querySelector(".modrinth-install-bar");
+  const fill = bar?.querySelector("span");
+
+  row.classList.toggle("installed", mode === "installed");
+  row.classList.toggle("failed", mode === "failed");
+
+  if (button) {
+    button.disabled = mode === "installing" || mode === "installed";
+    button.textContent =
+      text ||
+      (mode === "installing"
+        ? "Installing..."
+        : mode === "installed"
+          ? "Installed"
+          : mode === "failed"
+            ? "Retry"
+            : "Install");
+  }
+
+  if (bar) bar.classList.toggle("hidden", mode !== "installing" && mode !== "finishing");
+  if (fill && mode === "idle") fill.style.width = "0%";
+}
+
+const MODRINTH_BLANK_ICON =
+  "data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==";
+
+function setModrinthIcon(img, url) {
+  if (!img) return;
+  img.onerror = () => {
+    img.onerror = null;
+    img.src = MODRINTH_BLANK_ICON;
+  };
+  img.src = url && /^https:\/\/cdn\.modrinth\.com\//.test(url) ? url : MODRINTH_BLANK_ICON;
+}
+
+function askModrinthDependencies(hit, plan) {
+  return new Promise((resolve) => {
+    const backdrop = $("#modrinthDepsBackdrop");
+    const list = $("#modrinthDepsList");
+    const template = $("#modrinthDepRowTemplate");
+    const installBtn = $("#modrinthDepsInstallBtn");
+    const cancelBtn = $("#modrinthDepsCancelBtn");
+    const note = $("#modrinthDepsNote");
+
+    if (!backdrop || !list || !template || !installBtn || !cancelBtn) {
+      resolve(null);
+      return;
+    }
+
+    $("#modrinthDepsTitle").textContent = `Install ${hit.title}`;
+    $("#modrinthDepsText").textContent =
+      plan.dependencies.length === 1
+        ? `${hit.title} needs 1 other mod. Tick it to install it too.`
+        : `${hit.title} needs ${plan.dependencies.length} other mods. Tick the ones you want to install too.`;
+
+    const fragment = document.createDocumentFragment();
+
+    for (const dependency of plan.dependencies) {
+      const row = template.content.firstElementChild.cloneNode(true);
+      const check = row.querySelector("input");
+      const badge = row.querySelector('[data-field="badge"]');
+
+      check.value = dependency.projectId;
+      setModrinthIcon(row.querySelector(".modrinth-dep-icon"), dependency.iconUrl);
+      row.querySelector('[data-field="title"]').textContent = dependency.title;
+
+      const parts = [];
+      if (dependency.requiredBy !== plan.projectId)
+        parts.push(`needed by ${dependency.requiredByTitle}`);
+      if (dependency.installed) parts.push(dependency.installed.filename);
+      else if (dependency.versionNumber) parts.push(`v${dependency.versionNumber}`);
+      row.querySelector('[data-field="sub"]').textContent = parts.join(" · ") || "Required";
+
+      if (!dependency.compatible && !dependency.installed) {
+        row.classList.add("unavailable");
+        check.disabled = true;
+        badge.textContent = `No ${plan.loader} ${plan.minecraftVersion} version`;
+        badge.classList.add("missing");
+      } else if (dependency.installed) {
+        check.checked = false;
+        badge.textContent = dependency.installed.enabled ? "Installed" : "Installed (off)";
+        badge.classList.add("installed");
+      } else {
+        check.checked = true;
+      }
+
+      fragment.appendChild(row);
+    }
+
+    list.replaceChildren(fragment);
+
+    const updateButton = () => {
+      const count = list.querySelectorAll("input:checked").length;
+      installBtn.textContent = count ? `Install + ${count} required` : `Install ${hit.title} only`;
+
+      const missing = plan.dependencies.filter((dependency) => {
+        const box = list.querySelector(`input[value="${CSS.escape(dependency.projectId)}"]`);
+        return !dependency.installed && !box?.checked;
+      });
+
+      note.textContent = missing.length
+        ? `Without ${missing.map((dependency) => dependency.title).join(", ")}, ${hit.title} may not start.`
+        : "";
+    };
+
+    list.addEventListener("change", updateButton);
+    updateButton();
+
+    const finish = (value) => {
+      backdrop.classList.add("hidden");
+      list.removeEventListener("change", updateButton);
+      installBtn.removeEventListener("click", onInstall);
+      cancelBtn.removeEventListener("click", onCancel);
+      document.removeEventListener("keydown", onKey, true);
+      modrinthBrowser.depsOpen = false;
+      resolve(value);
+    };
+
+    const onInstall = () =>
+      finish([...list.querySelectorAll("input:checked")].map((input) => input.value));
+    const onCancel = () => finish(null);
+    const onKey = (event) => {
+      if (event.key !== "Escape") return;
+      event.stopPropagation();
+      event.preventDefault();
+      onCancel();
+    };
+
+    installBtn.addEventListener("click", onInstall);
+    cancelBtn.addEventListener("click", onCancel);
+    document.addEventListener("keydown", onKey, true);
+
+    modrinthBrowser.depsOpen = true;
+    backdrop.classList.remove("hidden");
+    installBtn.focus();
+  });
+}
+
+async function installModrinthResult(row, hit) {
+  const profileId = modrinthBrowser.profileId;
+  if (!profileId || modrinthBrowser.installing.has(hit.projectId)) return;
+
+  modrinthBrowser.installing.add(hit.projectId);
+  setModrinthResultState(row, "installing", "Checking...");
+  row.querySelector(".modrinth-install-bar")?.classList.add("hidden");
+
+  let dependencies = [];
+
+  try {
+    const plan = await window.launcherAPI.mods.modrinthPlan(profileId, hit.projectId);
+
+    if (!plan.compatible) {
+      throw new Error(`${hit.title} has no version for ${plan.loader} ${plan.minecraftVersion}.`);
+    }
+
+    if (plan.dependencies.length) {
+      const picked = await askModrinthDependencies(hit, plan);
+
+      if (!picked) {
+        modrinthBrowser.installing.delete(hit.projectId);
+        setModrinthResultState(row, "idle");
+        setModrinthStatus("");
+        return;
+      }
+
+      dependencies = picked;
+    }
+  } catch (error) {
+    modrinthBrowser.installing.delete(hit.projectId);
+    setModrinthResultState(row, "failed");
+    setModrinthStatus(friendlyErrorMessage(error) || `Failed to install ${hit.title}.`, true);
+    return;
+  }
+
+  setModrinthResultState(row, "installing");
+
+  const fill = row.querySelector(".modrinth-install-bar span");
+  let progress = 0;
+  if (fill) fill.style.width = "0%";
+
+  const timer = setInterval(() => {
+    progress = Math.min(90, progress + Math.max(1, (90 - progress) * 0.12));
+    if (fill) fill.style.width = `${progress}%`;
+  }, 160);
+
+  try {
+    const result = await window.launcherAPI.mods.installModrinth(profileId, hit.projectId, {
+      dependencies,
+    });
+    clearInterval(timer);
+
+    if (!result?.ok) {
+      throw new Error(result?.error || "Install failed.");
+    }
+
+    modrinthBrowser.changed = true;
+
+    if (fill) fill.style.width = "100%";
+    setModrinthResultState(row, "finishing", "Installing...");
+
+    const extra = Math.max(0, (result.stats?.downloaded || 0) - 1);
+    const depFailures = (result.failedMods || []).filter((id) => id !== hit.projectId).length;
+
+    setModrinthStatus(
+      `Installed ${hit.title}${extra ? ` + ${extra} required ${extra === 1 ? "mod" : "mods"}` : ""}.${
+        depFailures
+          ? ` ${depFailures} required mod${depFailures === 1 ? "" : "s"} failed, see Console.`
+          : ""
+      }`,
+      depFailures > 0
+    );
+
+    if (Array.isArray(result.logs)) {
+      result.logs.forEach((line) => appendConsole(`[modrinth] ${line}`));
+    }
+
+    for (const id of dependencies) {
+      const other = $(`#modrinthResults .modrinth-result[data-project="${CSS.escape(id)}"]`);
+      if (other && !(result.failedMods || []).includes(id))
+        setModrinthResultState(other, "installed");
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, 650));
+    setModrinthResultState(row, "installed");
+  } catch (error) {
+    clearInterval(timer);
+    setModrinthResultState(row, "failed");
+    setModrinthStatus(friendlyErrorMessage(error) || `Failed to install ${hit.title}.`, true);
+  } finally {
+    modrinthBrowser.installing.delete(hit.projectId);
+  }
+}
+
+function renderModrinthResults(hits) {
+  const root = $("#modrinthResults");
+  const template = $("#modrinthResultTemplate");
+  if (!root || !template) return;
+
+  const fragment = document.createDocumentFragment();
+
+  for (const hit of hits) {
+    const row = template.content.firstElementChild.cloneNode(true);
+    const icon = row.querySelector(".modrinth-icon");
+
+    row.dataset.project = hit.projectId;
+    setModrinthIcon(icon, hit.iconUrl);
+
+    row.querySelector('[data-field="title"]').textContent = hit.title;
+    row.querySelector('[data-field="author"]').textContent = hit.author ? `by ${hit.author}` : "";
+    row.querySelector('[data-field="description"]').textContent = hit.description;
+    row.querySelector('[data-field="downloads"]').textContent =
+      `${formatCompactNumber(hit.downloads)} downloads`;
+    row.querySelector('[data-field="categories"]').textContent = (hit.categories || [])
+      .slice(0, 4)
+      .join(", ");
+
+    if (modrinthBrowser.mode === "modpacks") {
+      const versions = (hit.gameVersions || []).filter((version) => /^\d/.test(version));
+      const newest = versions[versions.length - 1];
+      if (newest) {
+        row.querySelector('[data-field="categories"]').textContent = [
+          `MC ${newest}`,
+          ...(hit.categories || []).slice(0, 3),
+        ].join(", ");
+      }
+      setModrinthResultState(row, "idle", "Install");
+      row
+        .querySelector(".modrinth-install-btn")
+        .addEventListener("click", () => openModpackInstall(hit));
+      fragment.appendChild(row);
+      continue;
+    }
+
+    if (modrinthBrowser.installing.has(hit.projectId)) {
+      setModrinthResultState(row, "installing");
+    } else if (hit.installed) {
+      setModrinthResultState(
+        row,
+        "installed",
+        hit.installedEnabled ? "Installed" : "Installed (off)"
+      );
+    } else {
+      setModrinthResultState(row, "idle");
+    }
+
+    row.querySelector(".modrinth-install-btn").addEventListener("click", () => {
+      installModrinthResult(row, hit);
+    });
+
+    fragment.appendChild(row);
+  }
+
+  root.replaceChildren(fragment);
+  root.scrollTop = 0;
+}
+
+async function searchModrinthMods() {
+  const requestId = ++modrinthBrowser.requestId;
+  const root = $("#modrinthResults");
+
+  setModrinthStatus("Searching Modrinth...");
+
+  try {
+    const searchOptions = {
+      query: modrinthBrowser.query,
+      sort: modrinthBrowser.sort,
+      offset: modrinthBrowser.offset,
+      limit: modrinthBrowser.limit,
+    };
+
+    const isModpacks = modrinthBrowser.mode === "modpacks";
+    const result = isModpacks
+      ? await window.launcherAPI.modpacks.search(searchOptions)
+      : await window.launcherAPI.mods.searchModrinth(modrinthBrowser.profileId, searchOptions);
+
+    if (requestId !== modrinthBrowser.requestId || !modrinthBrowser.open) return;
+
+    modrinthBrowser.total = result.total || 0;
+
+    const target = $("#modrinthTarget");
+    if (target && !isModpacks)
+      target.textContent = `Minecraft ${result.minecraftVersion} · ${result.loader}`;
+
+    renderModrinthResults(result.hits || []);
+    updateModrinthPager();
+
+    if (!result.hits?.length) {
+      const noun = isModpacks ? "modpacks" : "mods";
+      setModrinthStatus(
+        modrinthBrowser.query
+          ? `No ${noun} found for "${modrinthBrowser.query}".`
+          : `No compatible ${noun} found.`
+      );
+    } else {
+      setModrinthStatus(
+        isModpacks
+          ? `${formatCompactNumber(modrinthBrowser.total)} modpacks`
+          : `${formatCompactNumber(modrinthBrowser.total)} compatible mods`
+      );
+    }
+  } catch (error) {
+    if (requestId !== modrinthBrowser.requestId) return;
+
+    if (root) root.replaceChildren();
+    modrinthBrowser.total = 0;
+    updateModrinthPager();
+    setModrinthStatus(friendlyErrorMessage(error) || "Could not reach Modrinth.", true);
+  }
+}
+
+function showModrinthBrowser(mode) {
+  modrinthBrowser.mode = mode;
+  modrinthBrowser.open = true;
+  modrinthBrowser.offset = 0;
+  modrinthBrowser.total = 0;
+  modrinthBrowser.changed = false;
+
+  const isModpacks = mode === "modpacks";
+  const title = $("#modrinthTitle");
+  if (title) title.textContent = isModpacks ? "Modrinth Modpacks" : "Modrinth";
+
+  $("#modrinthImportFileBtn")?.classList.toggle("hidden", !isModpacks);
+
+  const input = $("#modrinthSearchInput");
+  if (input) {
+    input.placeholder = isModpacks ? "Search modpacks..." : "Search mods...";
+    input.value = modrinthBrowser.query;
+    setTimeout(() => input.focus(), 30);
+  }
+
+  $("#modrinthResults")?.replaceChildren();
+  $("#modrinthBackdrop")?.classList.remove("hidden");
+
+  searchModrinthMods();
+}
+
+function openModrinthBrowser() {
+  const profile = getEditorProfile();
+
+  if (!profile) {
+    showAlert("Open an installation first.");
+    return;
+  }
+
+  const loader = String(profile.loaderType || "").toLowerCase();
+
+  if (!loader || loader === "vanilla") {
+    showAlert(
+      "Modrinth mods need a mod loader. Switch this installation to Fabric, Forge, Quilt or NeoForge first.",
+      {
+        title: "Mod loader required",
+      }
+    );
+    return;
+  }
+
+  modrinthBrowser.profileId = profile.id;
+
+  const target = $("#modrinthTarget");
+  if (target)
+    target.textContent = `${profile.name} · Minecraft ${profile.minecraftVersion} · ${loader}`;
+
+  if (modrinthBrowser.mode !== "mods") modrinthBrowser.query = "";
+  showModrinthBrowser("mods");
+}
+
+function openModpackBrowser() {
+  modrinthBrowser.profileId = "";
+
+  const target = $("#modrinthTarget");
+  if (target)
+    target.textContent = "Pick a modpack. It becomes a new installation with its loader and mods.";
+
+  if (modrinthBrowser.mode !== "modpacks") modrinthBrowser.query = "";
+  showModrinthBrowser("modpacks");
+}
+
+async function closeModrinthBrowser() {
+  if (!modrinthBrowser.open) return;
+
+  modrinthBrowser.open = false;
+  modrinthBrowser.requestId += 1;
+  clearTimeout(modrinthBrowser.searchTimer);
+  $("#modrinthBackdrop")?.classList.add("hidden");
+
+  if (
+    modrinthBrowser.mode === "mods" &&
+    (modrinthBrowser.changed || modrinthBrowser.installing.size)
+  ) {
+    await renderEditorMods();
+  }
+}
+
+function initModrinthBrowser() {
+  $("#browseModrinthBtn")?.addEventListener("click", () => openModrinthBrowser());
+  $("#newModpackBtn")?.addEventListener("click", () => openModpackBrowser());
+  $("#modrinthImportFileBtn")?.addEventListener("click", async () => {
+    const filePath = await window.launcherAPI.modpacks.pickFile();
+    if (filePath) openModpackInstall(null, filePath);
+  });
+  $("#modrinthCloseBtn")?.addEventListener("click", closeModrinthBrowser);
+
+  $("#modrinthBackdrop")?.addEventListener("click", (event) => {
+    if (event.target === event.currentTarget) closeModrinthBrowser();
+  });
+
+  $("#modrinthSearchInput")?.addEventListener("input", (event) => {
+    modrinthBrowser.query = event.target.value.trim();
+    modrinthBrowser.offset = 0;
+    clearTimeout(modrinthBrowser.searchTimer);
+    modrinthBrowser.searchTimer = setTimeout(searchModrinthMods, 350);
+  });
+
+  $("#modrinthSearchInput")?.addEventListener("keydown", (event) => {
+    if (event.key !== "Enter") return;
+    event.preventDefault();
+    clearTimeout(modrinthBrowser.searchTimer);
+    modrinthBrowser.query = event.target.value.trim();
+    modrinthBrowser.offset = 0;
+    searchModrinthMods();
+  });
+
+  $("#modrinthSortSelect")?.addEventListener("change", (event) => {
+    modrinthBrowser.sort = event.target.value;
+    modrinthBrowser.offset = 0;
+    searchModrinthMods();
+  });
+
+  $("#modrinthPrevBtn")?.addEventListener("click", () => {
+    modrinthBrowser.offset = Math.max(0, modrinthBrowser.offset - modrinthBrowser.limit);
+    searchModrinthMods();
+  });
+
+  $("#modrinthNextBtn")?.addEventListener("click", () => {
+    modrinthBrowser.offset += modrinthBrowser.limit;
+    searchModrinthMods();
+  });
+
+  document.addEventListener(
+    "keydown",
+    (event) => {
+      if (
+        !modrinthBrowser.open ||
+        modrinthBrowser.depsOpen ||
+        modpackInstall.open ||
+        event.key !== "Escape"
+      )
+        return;
+      if (!$("#appDialogBackdrop")?.classList.contains("hidden")) return;
+      if (mcSelectState.open) return;
+
+      event.stopPropagation();
+      closeModrinthBrowser();
+    },
+    true
+  );
+}
+
+const modpackInstall = {
+  open: false,
+  busy: false,
+  hit: null,
+  filePath: "",
+  versions: [],
+  unsubscribe: null,
+};
+
+function modpackEls() {
+  return {
+    backdrop: $("#modpackInstallBackdrop"),
+    title: $("#modpackInstallTitle"),
+    text: $("#modpackInstallText"),
+    versionField: $("#modpackVersionField"),
+    versionSelect: $("#modpackVersionSelect"),
+    name: $("#modpackNameInput"),
+    progress: $("#modpackInstallProgress"),
+    bar: $("#modpackInstallBar"),
+    progressText: $("#modpackInstallProgressText"),
+    error: $("#modpackInstallError"),
+    cancel: $("#modpackInstallCancelBtn"),
+    install: $("#modpackInstallBtn"),
+  };
+}
+
+function setModpackError(text) {
+  const el = modpackEls();
+  el.error.textContent = text || "";
+  el.error.classList.toggle("hidden", !text);
+}
+
+function setModpackBusy(busy) {
+  const el = modpackEls();
+  modpackInstall.busy = busy;
+  el.install.disabled = busy;
+  el.cancel.disabled = busy;
+  el.name.disabled = busy;
+  el.versionSelect.disabled = busy || !modpackInstall.versions.length;
+  syncMcSelect(el.versionSelect);
+  el.progress.classList.toggle("hidden", !busy && el.bar.style.width !== "100%");
+}
+
+function describeModpackVersion(version) {
+  const mc = (version.gameVersions || []).join(", ");
+  const loaders = (version.loaders || []).join(", ");
+  const tag = version.type && version.type !== "release" ? ` (${version.type})` : "";
+  return `${version.versionNumber || version.name}${tag} · MC ${mc}${loaders ? ` · ${loaders}` : ""}`;
+}
+
+async function openModpackInstall(hit, filePath = "") {
+  const el = modpackEls();
+  if (!el.backdrop) return;
+
+  modpackInstall.open = true;
+  modpackInstall.hit = hit;
+  modpackInstall.filePath = filePath;
+  modpackInstall.versions = [];
+
+  el.title.textContent = hit ? `Install ${hit.title}` : "Import modpack file";
+  el.text.textContent = hit
+    ? "A new installation is made with the modpack's Minecraft version, mod loader, mods and configs."
+    : `File: ${filePath.split(/[\\/]/).pop()}`;
+  el.name.value = hit
+    ? hit.title
+    : filePath
+        .split(/[\\/]/)
+        .pop()
+        .replace(/\.mrpack$/i, "");
+  el.bar.style.width = "0%";
+  el.progressText.textContent = "";
+  el.progress.classList.add("hidden");
+  el.install.textContent = "Install";
+  setModpackError("");
+
+  el.versionField.classList.toggle("hidden", !hit);
+  el.versionSelect.replaceChildren();
+
+  el.backdrop.classList.remove("hidden");
+  setModpackBusy(false);
+
+  if (!hit) {
+    el.install.focus();
+    return;
+  }
+
+  el.install.disabled = true;
+  const loading = document.createElement("option");
+  loading.textContent = "Loading versions...";
+  el.versionSelect.appendChild(loading);
+  syncMcSelect(el.versionSelect);
+
+  try {
+    const versions = await window.launcherAPI.modpacks.versions(hit.projectId);
+    if (!modpackInstall.open || modpackInstall.hit !== hit) return;
+
+    modpackInstall.versions = versions;
+    el.versionSelect.replaceChildren();
+
+    for (const version of versions) {
+      const option = document.createElement("option");
+      option.value = version.id;
+      option.textContent = describeModpackVersion(version);
+      el.versionSelect.appendChild(option);
+    }
+
+    if (!versions.length) {
+      const none = document.createElement("option");
+      none.textContent = "No installable versions";
+      el.versionSelect.appendChild(none);
+      setModpackError("This modpack has no .mrpack versions to install.");
+    }
+
+    syncMcSelect(el.versionSelect);
+    setModpackBusy(false);
+    el.install.disabled = !versions.length;
+    el.install.focus();
+  } catch (error) {
+    setModpackError(friendlyErrorMessage(error, "Could not load versions."));
+  }
+}
+
+function closeModpackInstall() {
+  if (modpackInstall.busy) return;
+  modpackInstall.open = false;
+  modpackEls().backdrop?.classList.add("hidden");
+}
+
+async function runModpackInstall() {
+  const el = modpackEls();
+  if (modpackInstall.busy) return;
+
+  const source = modpackInstall.hit
+    ? { versionId: el.versionSelect.value, name: el.name.value.trim() }
+    : { filePath: modpackInstall.filePath, name: el.name.value.trim() };
+
+  if (modpackInstall.hit && !source.versionId) return;
+
+  setModpackError("");
+  el.bar.style.width = "0%";
+  el.progress.classList.remove("hidden");
+  el.progressText.textContent = "Starting...";
+  setModpackBusy(true);
+
+  const stageBase = { reading: 3, fetching: 5, loader: 12, files: 18, overrides: 94, done: 100 };
+
+  const unsubscribe = window.launcherAPI.modpacks.onProgress?.((data) => {
+    let percent = stageBase[data.stage] ?? 0;
+
+    if (data.stage === "files" && data.total) {
+      percent = 18 + Math.round((data.done / data.total) * 75);
+    }
+
+    if (data.stage !== "done") el.bar.style.width = `${Math.min(percent, 97)}%`;
+    if (data.message) el.progressText.textContent = data.message;
+  });
+
+  try {
+    const result = await window.launcherAPI.modpacks.install(source);
+
+    el.bar.style.width = "100%";
+    el.progressText.textContent = `Installed ${result.profile.name}: Minecraft ${result.minecraftVersion}, ${result.loaderType}${result.loaderVersion ? ` ${result.loaderVersion}` : ""}, ${result.files} files.`;
+    appendConsole(`[modpack] ${el.progressText.textContent}`);
+
+    await new Promise((resolve) => setTimeout(resolve, 900));
+
+    modpackInstall.busy = false;
+    closeModpackInstall();
+    await closeModrinthBrowser();
+
+    await loadProfiles();
+    await selectProfile(result.profile.id);
+    showPage("installations");
+    setStatus(`Modpack installed: ${result.profile.name}`);
+  } catch (error) {
+    el.bar.style.width = "0%";
+    el.progress.classList.add("hidden");
+    setModpackBusy(false);
+    el.install.textContent = "Try again";
+    setModpackError(friendlyErrorMessage(error, "The modpack could not be installed."));
+  } finally {
+    unsubscribe?.();
+  }
+}
+
+function initModpackInstall() {
+  const el = modpackEls();
+  if (!el.backdrop) return;
+
+  el.cancel.addEventListener("click", closeModpackInstall);
+  el.install.addEventListener("click", runModpackInstall);
+
+  el.name.addEventListener("keydown", (event) => {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      runModpackInstall();
+    }
+  });
+
+  document.addEventListener(
+    "keydown",
+    (event) => {
+      if (!modpackInstall.open || event.key !== "Escape") return;
+      if (mcSelectState.open) return;
+      event.stopPropagation();
+      closeModpackInstall();
+    },
+    true
+  );
+}
+
+const shareUi = {
+  open: false,
+  profileId: "",
+  requestId: 0,
+};
+
+async function generateShareCode() {
+  const profileId = shareUi.profileId;
+  const requestId = ++shareUi.requestId;
+  const textarea = $("#shareCodeText");
+  const summary = $("#shareSummary");
+  const missing = $("#shareMissing");
+  const error = $("#shareError");
+  const copy = $("#shareCopyBtn");
+
+  textarea.value = "Making the code... (mods are looked up on Modrinth)";
+  summary.replaceChildren();
+  missing.textContent = "";
+  error.classList.add("hidden");
+  copy.disabled = true;
+
+  try {
+    const result = await window.launcherAPI.share.exportProfile(profileId, {
+      includeConfigs: $("#shareIncludeConfigs").checked,
+    });
+
+    if (requestId !== shareUi.requestId || !shareUi.open) return;
+
+    textarea.value = result.code;
+    copy.disabled = false;
+
+    const info = result.summary;
+    const lines = [
+      `Minecraft ${info.minecraftVersion} · ${info.loaderType}${info.loaderVersion ? ` ${info.loaderVersion}` : ""} · memory ${info.memory}`,
+      `${info.modrinthMods} of ${info.mods} mods will be downloaded from Modrinth${info.disabledMods ? ` (${info.disabledMods} disabled)` : ""}`,
+      info.hasOptions
+        ? "Game options (video, controls, sound) included"
+        : "No options.txt yet (start the game once to make one)",
+      `${info.configFiles} config file${info.configFiles === 1 ? "" : "s"}${info.configSkipped ? ` (${info.configSkipped} too big or binary, skipped)` : ""}`,
+      `Code length: ${info.length.toLocaleString()} characters`,
+    ];
+
+    summary.replaceChildren(
+      ...lines.map((line) => {
+        const item = document.createElement("li");
+        item.textContent = line;
+        return item;
+      })
+    );
+
+    if (info.missingMods.length) {
+      missing.textContent = `Not on Modrinth, send these yourself: ${info.missingMods.join(", ")}`;
+    }
+  } catch (caught) {
+    if (requestId !== shareUi.requestId) return;
+    textarea.value = "";
+    error.textContent = friendlyErrorMessage(caught, "Could not make the share code.");
+    error.classList.remove("hidden");
+  }
+}
+
+function openShareDialog() {
+  const profile = getEditorProfile();
+
+  if (!profile) {
+    showAlert("Open an installation first.");
+    return;
+  }
+
+  shareUi.open = true;
+  shareUi.profileId = profile.id;
+  $("#shareTitle").textContent = `Share ${profile.name}`;
+  $("#shareCopyBtn").textContent = "Copy code";
+  $("#shareBackdrop").classList.remove("hidden");
+
+  generateShareCode();
+}
+
+function closeShareDialog() {
+  shareUi.open = false;
+  shareUi.requestId += 1;
+  $("#shareBackdrop")?.classList.add("hidden");
+}
+
+async function copyShareCode() {
+  const textarea = $("#shareCodeText");
+  const button = $("#shareCopyBtn");
+  if (!textarea.value) return;
+
+  try {
+    await navigator.clipboard.writeText(textarea.value);
+  } catch {
+    textarea.select();
+    document.execCommand("copy");
+  }
+
+  button.textContent = "Copied!";
+  setTimeout(() => {
+    if (shareUi.open) button.textContent = "Copy code";
+  }, 1600);
+}
+
+const importShareUi = {
+  open: false,
+  busy: false,
+  timer: null,
+  requestId: 0,
+  valid: false,
+};
+
+function importShareEls() {
+  return {
+    backdrop: $("#importShareBackdrop"),
+    text: $("#importShareText"),
+    summary: $("#importShareSummary"),
+    nameField: $("#importShareNameField"),
+    name: $("#importShareName"),
+    progress: $("#importShareProgress"),
+    bar: $("#importShareBar"),
+    progressText: $("#importShareProgressText"),
+    note: $("#importShareNote"),
+    error: $("#importShareError"),
+    cancel: $("#importShareCancelBtn"),
+    import: $("#importShareBtn"),
+  };
+}
+
+function setImportShareError(text) {
+  const el = importShareEls();
+  el.error.textContent = text || "";
+  el.error.classList.toggle("hidden", !text);
+}
+
+async function previewImportCode() {
+  const el = importShareEls();
+  const code = el.text.value.trim();
+  const requestId = ++importShareUi.requestId;
+
+  importShareUi.valid = false;
+  el.import.disabled = true;
+  el.summary.replaceChildren();
+  el.note.textContent = "";
+  setImportShareError("");
+
+  if (!code) {
+    el.nameField.classList.add("hidden");
+    return;
+  }
+
+  try {
+    const info = await window.launcherAPI.share.preview(code);
+    if (requestId !== importShareUi.requestId) return;
+
+    const lines = [
+      `${info.name}: Minecraft ${info.minecraftVersion} · ${info.loaderType}${info.loaderVersion ? ` ${info.loaderVersion}` : ""}`,
+      `${info.modrinthMods} mods to download from Modrinth${info.disabledMods ? ` (${info.disabledMods} disabled)` : ""}`,
+      `Memory ${info.memory}${info.hasOptions ? " · game options included" : ""}${info.configFiles ? ` · ${info.configFiles} config files` : ""}`,
+    ];
+
+    el.summary.replaceChildren(
+      ...lines.map((line) => {
+        const item = document.createElement("li");
+        item.textContent = line;
+        return item;
+      })
+    );
+
+    if (info.missingMods.length) {
+      el.note.textContent = `Not included (not on Modrinth): ${info.missingMods.join(", ")}`;
+    }
+
+    if (!el.name.value || el.name.dataset.auto === "true") {
+      el.name.value = info.name;
+      el.name.dataset.auto = "true";
+    }
+
+    el.nameField.classList.remove("hidden");
+    importShareUi.valid = true;
+    el.import.disabled = importShareUi.busy;
+  } catch (error) {
+    if (requestId !== importShareUi.requestId) return;
+    el.nameField.classList.add("hidden");
+    setImportShareError(friendlyErrorMessage(error, "That code could not be read."));
+  }
+}
+
+function openImportShare() {
+  const el = importShareEls();
+  if (!el.backdrop) return;
+
+  importShareUi.open = true;
+  importShareUi.valid = false;
+  el.text.value = "";
+  el.name.value = "";
+  el.name.dataset.auto = "true";
+  el.summary.replaceChildren();
+  el.note.textContent = "";
+  el.nameField.classList.add("hidden");
+  el.progress.classList.add("hidden");
+  el.bar.style.width = "0%";
+  el.import.disabled = true;
+  el.import.textContent = "Import";
+  setImportShareError("");
+
+  el.backdrop.classList.remove("hidden");
+  setTimeout(() => el.text.focus(), 30);
+}
+
+function closeImportShare() {
+  if (importShareUi.busy) return;
+  importShareUi.open = false;
+  importShareUi.requestId += 1;
+  importShareEls().backdrop?.classList.add("hidden");
+}
+
+async function runImportShare() {
+  const el = importShareEls();
+  if (importShareUi.busy || !importShareUi.valid) return;
+
+  importShareUi.busy = true;
+  el.import.disabled = true;
+  el.cancel.disabled = true;
+  el.text.disabled = true;
+  el.name.disabled = true;
+  setImportShareError("");
+  el.progress.classList.remove("hidden");
+  el.bar.style.width = "3%";
+  el.progressText.textContent = "Starting...";
+
+  const unsubscribe = window.launcherAPI.share.onProgress?.((data) => {
+    let percent = { loader: 8, mods: 15, files: 95 }[data.stage] ?? null;
+    if (data.stage === "mods" && data.total)
+      percent = 15 + Math.round((data.done / data.total) * 78);
+    if (percent !== null) el.bar.style.width = `${Math.min(percent, 97)}%`;
+    if (data.message) el.progressText.textContent = data.message;
+  });
+
+  const finishUi = () => {
+    importShareUi.busy = false;
+    el.cancel.disabled = false;
+    el.text.disabled = false;
+    el.name.disabled = false;
+  };
+
+  try {
+    const result = await window.launcherAPI.share.importCode(el.text.value.trim(), {
+      name: el.name.value.trim(),
+    });
+
+    el.bar.style.width = "100%";
+    el.progressText.textContent = `Imported ${result.profile.name} with ${result.downloaded} mods.`;
+    result.failed.forEach((line) => appendConsole(`[share] ${line}`));
+
+    await new Promise((resolve) => setTimeout(resolve, 900));
+
+    finishUi();
+    closeImportShare();
+
+    await loadProfiles();
+    await selectProfile(result.profile.id);
+    showPage("installations");
+
+    const problems = [];
+    if (result.failed.length)
+      problems.push(
+        `${result.failed.length} mod${result.failed.length === 1 ? "" : "s"} could not be downloaded (see Console).`
+      );
+    if (result.missingMods.length)
+      problems.push(`Not on Modrinth, get these yourself:\n${result.missingMods.join("\n")}`);
+
+    if (problems.length) {
+      showAlert(`${result.profile.name} was imported.\n\n${problems.join("\n\n")}`, {
+        title: "Imported with notes",
+      });
+    } else {
+      setStatus(`Imported ${result.profile.name}.`);
+    }
+  } catch (error) {
+    finishUi();
+    el.bar.style.width = "0%";
+    el.progress.classList.add("hidden");
+    el.import.disabled = false;
+    el.import.textContent = "Try again";
+    setImportShareError(friendlyErrorMessage(error, "The installation could not be imported."));
+  } finally {
+    unsubscribe?.();
+  }
+}
+
+function initShareFeatures() {
+  $("#shareInstallationBtn")?.addEventListener("click", openShareDialog);
+  $("#shareCloseBtn")?.addEventListener("click", closeShareDialog);
+  $("#shareCopyBtn")?.addEventListener("click", copyShareCode);
+  $("#shareIncludeConfigs")?.addEventListener("change", generateShareCode);
+  $("#shareCodeText")?.addEventListener("focus", (event) => event.target.select());
+
+  $("#importShareCodeBtn")?.addEventListener("click", openImportShare);
+  $("#importShareCancelBtn")?.addEventListener("click", closeImportShare);
+  $("#importShareBtn")?.addEventListener("click", runImportShare);
+
+  $("#importShareText")?.addEventListener("input", () => {
+    clearTimeout(importShareUi.timer);
+    importShareUi.timer = setTimeout(previewImportCode, 250);
+  });
+
+  $("#importShareName")?.addEventListener("input", (event) => {
+    event.target.dataset.auto = "false";
+  });
+
+  document.addEventListener(
+    "keydown",
+    (event) => {
+      if (event.key !== "Escape") return;
+
+      if (shareUi.open) {
+        event.stopPropagation();
+        closeShareDialog();
+      } else if (importShareUi.open) {
+        event.stopPropagation();
+        closeImportShare();
+      }
+    },
+    true
+  );
+}
+
+async function checkLauncherUpdateManually() {
+  launcherUpdatePrompt.manual = true;
+  return window.launcherAPI.updater.check();
+}
+
 async function boot() {
+  initSimpleMode();
   initMcSelects();
   await loadSystemMemoryInfo();
   await initEvents();
@@ -6662,8 +8884,14 @@ async function boot() {
   await loadProfiles();
 
   initHomeWidgets();
+  initAccountSwitcher();
+  initLauncherUpdatePrompt();
+  initModrinthBrowser();
+  initModpackInstall();
+  initShareFeatures();
   initJavaInstallProgress();
   initDataFolderSetting();
+  await initSharedFoldersSetting();
   await initUpdateSettings();
   initDeveloperScreen();
   initOnboardingEvents();

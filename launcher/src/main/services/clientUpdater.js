@@ -7,6 +7,7 @@ const { URL } = require("url");
 
 const storage = require("./storage");
 const profileService = require("./profiles");
+const sharedFolders = require("./sharedFolders");
 
 const CLIENT_UPDATE_BASE_URL =
   process.env.ECLIPSE_CLIENT_UPDATE_BASE_URL ||
@@ -222,6 +223,10 @@ function deleteManagedFilesFromManifest(manifest, clientRoot) {
     const targetPath = path.join(clientRoot, relativePath);
 
     if (!targetPath.startsWith(path.resolve(clientRoot) + path.sep)) {
+      continue;
+    }
+
+    if (sharedFolders.isLinkedPath(clientRoot, relativePath)) {
       continue;
     }
 

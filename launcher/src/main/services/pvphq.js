@@ -1,6 +1,9 @@
 const { app } = require("electron");
 
 const RANKED_URL = "https://pvphq.com/api/ranked/";
+const OVERALL_URL = "https://pvphq.com/api/v1/leaderboard/ranked/overall?page=0&size=100";
+const OVERALL_CACHE_MS = 5 * 60 * 1000;
+const TOTAL_LADDERS = 11;
 const MOJANG_PROFILE_URL = "https://api.mojang.com/users/profiles/minecraft/";
 const CACHE_MS = 60 * 1000;
 const TIMEOUT_MS = 6000;
@@ -77,6 +80,7 @@ const TIER_COLORS = {
 };
 
 const cache = new Map();
+let overallCache = null;
 let rateLimitedUntil = 0;
 
 function userAgent() {
@@ -226,6 +230,25 @@ function parseRanked(body) {
   };
 }
 
+async function getOverallEntry(uuid) {
+  if (!overallCache || Date.now() - overallCache.at > OVERALL_CACHE_MS) {
+    try {
+      const result = await getJson(OVERALL_URL);
+      const entries = Array.isArray(result.body?.entries) ? result.body.entries : [];
+      overallCache = { at: Date.now(), entries };
+    } catch {
+      overallCache = { at: Date.now(), entries: [] };
+    }
+  }
+
+  const id = normalizeUuid(uuid);
+  const entry = overallCache.entries.find((item) => normalizeUuid(item.uuid) === id);
+
+  return entry
+    ? { overallPoints: number(entry.points, 0), overallRank: number(entry.rank, 0) }
+    : {};
+}
+
 async function getStats(player) {
   const query = String(player || "").trim();
   if (!query) throw new Error("Sign in or set a player name in the widget options.");
@@ -263,12 +286,20 @@ async function getStats(player) {
       throw new Error(`PvPHQ returned an error (HTTP ${result.status}).`);
     }
 
+    const parsed = parseRanked(result.body);
+
     return {
       found: true,
       uuid: resolved.uuid,
-      name: resolved.name || (normalizeUuid(query) ? "" : query),
+      name:
+        resolved.name ||
+        String(result.body?.name || result.body?.username || "") ||
+        (normalizeUuid(query) ? "" : query),
       fetchedAt: Date.now(),
-      ...parseRanked(result.body),
+      totalLadders: TOTAL_LADDERS,
+      kitsRanked: parsed.ladders.filter((ladder) => ladder.placed).length,
+      ...parsed,
+      ...(await getOverallEntry(resolved.uuid)),
     };
   })();
 

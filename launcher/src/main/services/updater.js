@@ -19,8 +19,8 @@ let feedConfigured = false;
 let portableDownload = null;
 let portableApplyOnQuit = false;
 
-autoUpdater.autoDownload = true;
-autoUpdater.autoInstallOnAppQuit = settings.getSettings().autoUpdateLauncher;
+autoUpdater.autoDownload = false;
+autoUpdater.autoInstallOnAppQuit = false;
 
 const PORTABLE_MANIFEST = "latest-portable.json";
 const PORTABLE_STATE_FILE = "portable-update.json";
@@ -247,33 +247,8 @@ async function checkPortable(manual = false) {
     return { ok: true, portable: true, updateAvailable: false };
   }
 
-  updateInfo = { ...manifest, portable: true };
+  updateInfo = { ...manifest, portable: true, currentVersion: app.getVersion() };
   sendStatus("available", { info: updateInfo });
-
-  if (!portableDownload) {
-    const paths = pendingUpdatePaths();
-
-    portableDownload = downloadPortableFile(
-      `${LAUNCHER_UPDATE_URL}${encodeURIComponent(manifest.file)}`,
-      paths.file,
-      manifest.sha512,
-      manifest.size
-    )
-      .then(() => {
-        fs.writeFileSync(paths.meta, JSON.stringify({ version: manifest.version }, null, 2));
-        portableApplyOnQuit = settings.getSettings().autoUpdateLauncher;
-        sendStatus("downloaded", { info: updateInfo });
-      })
-      .catch((error) => {
-        sendStatus("error", {
-          message: error.message || String(error),
-          stack: error.stack || "",
-        });
-      })
-      .finally(() => {
-        portableDownload = null;
-      });
-  }
 
   return { ok: true, portable: true, updateAvailable: true };
 }
@@ -352,7 +327,6 @@ function applyPortableUpdate(restart) {
 }
 
 function setAutoUpdateLauncher(enabled) {
-  autoUpdater.autoInstallOnAppQuit = Boolean(enabled);
   portableApplyOnQuit = Boolean(enabled) && Boolean(readPendingPortableUpdate());
 }
 
@@ -563,8 +537,57 @@ async function check(options = {}) {
   }
 }
 
+async function downloadPortable() {
+  if (readPendingPortableUpdate()) {
+    sendStatus("downloaded", { info: updateInfo });
+    return { ok: true };
+  }
+
+  if (!updateInfo?.portable) {
+    throw new Error("No update available.");
+  }
+
+  if (!portableDownload) {
+    const paths = pendingUpdatePaths();
+    const manifest = updateInfo;
+
+    portableDownload = downloadPortableFile(
+      `${LAUNCHER_UPDATE_URL}${encodeURIComponent(manifest.file)}`,
+      paths.file,
+      manifest.sha512,
+      manifest.size
+    )
+      .then(() => {
+        fs.writeFileSync(paths.meta, JSON.stringify({ version: manifest.version }, null, 2));
+        sendStatus("downloaded", { info: updateInfo });
+      })
+      .finally(() => {
+        portableDownload = null;
+      });
+  }
+
+  await portableDownload;
+  return { ok: true };
+}
+
 async function download() {
   configureFeed();
+
+  if (portableExecutable()) {
+    try {
+      return await downloadPortable();
+    } catch (error) {
+      sendStatus("error", {
+        message: error.message || String(error),
+        stack: error.stack || "",
+      });
+
+      return {
+        ok: false,
+        error: error.message || String(error),
+      };
+    }
+  }
 
   if (!updateInfo) {
     const error = "No update available.";

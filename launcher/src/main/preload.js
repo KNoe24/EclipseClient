@@ -10,6 +10,9 @@ contextBridge.exposeInMainWorld("launcherAPI", {
     login: () => ipcRenderer.invoke("auth:login"),
     getAccount: () => ipcRenderer.invoke("auth:getAccount"),
     loginOffline: (username) => ipcRenderer.invoke("auth:loginOffline", username),
+    listAccounts: () => ipcRenderer.invoke("auth:listAccounts"),
+    switchAccount: (uuid) => ipcRenderer.invoke("auth:switchAccount", uuid),
+    removeAccount: (uuid) => ipcRenderer.invoke("auth:removeAccount", uuid),
     getOfflineEligibility: () => ipcRenderer.invoke("auth:getOfflineEligibility"),
     logout: () => ipcRenderer.invoke("auth:logout"),
   },
@@ -47,6 +50,42 @@ contextBridge.exposeInMainWorld("launcherAPI", {
     },
   },
 
+  modpacks: {
+    search: (options = {}) => ipcRenderer.invoke("modpacks:search", options),
+    versions: (projectId) => ipcRenderer.invoke("modpacks:versions", projectId),
+    pickFile: () => ipcRenderer.invoke("modpacks:pickFile"),
+    install: (source) => ipcRenderer.invoke("modpacks:install", source),
+    onProgress: (callback) => {
+      const listener = (_event, data) => callback(data);
+      ipcRenderer.on("modpacks:progress", listener);
+      return () => ipcRenderer.removeListener("modpacks:progress", listener);
+    },
+  },
+
+  share: {
+    exportProfile: (profileId, options = {}) =>
+      ipcRenderer.invoke("share:export", profileId, options),
+    preview: (code) => ipcRenderer.invoke("share:preview", code),
+    importCode: (code, options = {}) => ipcRenderer.invoke("share:import", code, options),
+    onProgress: (callback) => {
+      const listener = (_event, data) => callback(data);
+      ipcRenderer.on("share:progress", listener);
+      return () => ipcRenderer.removeListener("share:progress", listener);
+    },
+  },
+
+  sharedFolders: {
+    get: () => ipcRenderer.invoke("sharedFolders:get"),
+    update: (patch) => ipcRenderer.invoke("sharedFolders:update", patch),
+    choose: (folderId = "") => ipcRenderer.invoke("sharedFolders:choose", folderId),
+    reset: (folderId = "") => ipcRenderer.invoke("sharedFolders:reset", folderId),
+    add: (name, label = "") => ipcRenderer.invoke("sharedFolders:add", name, label),
+    remove: (folderId) => ipcRenderer.invoke("sharedFolders:remove", folderId),
+    getProfile: (profileId) => ipcRenderer.invoke("sharedFolders:getProfile", profileId),
+    setProfile: (profileId, patch, options = {}) =>
+      ipcRenderer.invoke("sharedFolders:setProfile", profileId, patch, options),
+  },
+
   mods: {
     list: (profileId) => ipcRenderer.invoke("mods:list", profileId),
 
@@ -62,6 +101,18 @@ contextBridge.exposeInMainWorld("launcherAPI", {
 
     remove: (profileId, filename) => {
       return ipcRenderer.invoke("mods:remove", profileId, filename);
+    },
+
+    searchModrinth: (profileId, options = {}) => {
+      return ipcRenderer.invoke("mods:searchModrinth", profileId, options);
+    },
+
+    modrinthPlan: (profileId, projectId) => {
+      return ipcRenderer.invoke("mods:modrinthPlan", profileId, projectId);
+    },
+
+    installModrinth: (profileId, projectId, options = {}) => {
+      return ipcRenderer.invoke("mods:installModrinth", profileId, projectId, options);
     },
 
     setEnabled: (profileId, filename, enabled) => {
@@ -101,6 +152,11 @@ contextBridge.exposeInMainWorld("launcherAPI", {
     saveEditorImage: (skinId, dataUrl) => {
       return ipcRenderer.invoke("skins:saveEditorImage", skinId, dataUrl);
     },
+  },
+
+  dev: {
+    openDevTools: () => ipcRenderer.invoke("dev:openDevTools"),
+    relaunch: () => ipcRenderer.invoke("dev:relaunch"),
   },
 
   settings: {

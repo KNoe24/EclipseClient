@@ -8,6 +8,7 @@ const authService = require("./auth");
 const profileService = require("./profiles");
 const storage = require("./storage");
 const javaRuntime = require("./javaRuntime");
+const sharedFolders = require("./sharedFolders");
 
 const instances = new Map();
 const instanceListeners = new Set();
@@ -1138,6 +1139,7 @@ async function launch(profileId, window) {
   const launchStartTime = Date.now();
 
   const profile = await profileService.getProfileById(profileId);
+  await authService.refreshActiveAccountIfNeeded();
   const authorization = authService.getLaunchAuth();
 
   const instance = {
@@ -1189,6 +1191,13 @@ async function launch(profileId, window) {
       if (instance.killRequested) {
         throw new Error("Launch was cancelled.");
       }
+
+      const shared = sharedFolders.applyToGameDir(profile.gameDir, {
+        profileId: profile.id,
+        unlinkDisabled: false,
+      });
+      shared.logs.forEach((line) => log(`[shared] ${line}`));
+      shared.errors.forEach((line) => log(`[shared] Could not share ${line}`));
 
       storage.ensureProfileRuntimeDirs(profile.gameDir);
       storage.ensureRuntimeDirs();
@@ -1266,6 +1275,11 @@ async function launch(profileId, window) {
       };
 
       options.javaPath = await javaRuntime.resolveJavaForLaunch(profile, customVersionId, log);
+
+      if (profile.forgeInstallerPath && fs.existsSync(profile.forgeInstallerPath)) {
+        options.forge = profile.forgeInstallerPath;
+        log(`Loader installer: ${path.basename(profile.forgeInstallerPath)}`);
+      }
 
       const jvmArgs = splitArgs(profile.extraJvmArgs);
       const mcArgs = splitArgs(profile.extraMcArgs);

@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://api.mineatar.io https://textures.minecraft.net; connect-src 'self' https://api.mcsrvstat.us https://api.mineatar.io; frame-src https://www.minecraft.net https://launcher.wawe.cc https://wawe.cc; child-src https://www.minecraft.net https://launcher.wawe.cc https://wawe.cc;"
+      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://api.mineatar.io https://textures.minecraft.net https://cdn.modrinth.com; connect-src 'self' https://api.mcsrvstat.us https://api.mineatar.io; frame-src https://www.minecraft.net https://launcher.wawe.cc https://wawe.cc; child-src https://www.minecraft.net https://launcher.wawe.cc https://wawe.cc;"
     />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Eclipse Client</title>
@@ -18,7 +18,14 @@
     <div class="app">
       <aside class="sidebar">
         <div class="account-box">
-          <div class="account-header">
+          <button
+            id="accountSwitchBtn"
+            class="account-header account-switch"
+            type="button"
+            aria-haspopup="menu"
+            aria-expanded="false"
+            title="Switch account"
+          >
             <img
               id="playerHead"
               class="player-head"
@@ -26,11 +33,15 @@
               alt="Player head"
             />
 
-            <div>
+            <div class="account-text">
               <div id="accountName" class="mct whitetext">Not logged in</div>
               <div id="accountSubtext" class="account-subtext mct">Microsoft account</div>
             </div>
-          </div>
+
+            <span class="account-switch-arrow mc-select-arrow" aria-hidden="true"></span>
+          </button>
+
+          <div id="accountMenu" class="account-menu hidden" role="menu"></div>
 
           <button id="loginBtn" class="mcbtn">Login with Microsoft</button>
           <button id="logoutBtn" class="secondary hidden mcbtn">Logout</button>
@@ -47,12 +58,12 @@
             <span>Installations</span>
           </button>
 
-          <button class="nav-btn mcbtn" data-page="console">
+          <button class="nav-btn mcbtn" data-page="console" data-advanced>
             <img class="nav-icon" src="./static/img/console.svg" alt="" />
             <span>Console</span>
           </button>
 
-          <button class="nav-btn mcbtn" data-page="changelog">
+          <button class="nav-btn mcbtn" data-page="changelog" data-advanced>
             <img class="nav-icon" src="./static/img/changelog.svg" alt="" />
             <span>Changelog</span>
           </button>
@@ -152,7 +163,26 @@
         <div class="installations-header">
           <div class="installations-title-block">
             <h2 class="mct whitetext shadow">Installations</h2>
-            <p class="whitetext mcr">Click a profile to select and edit it.</p>
+            <p
+              class="whitetext mcr"
+              data-simple="Each one is its own Minecraft. Click one to change it."
+            >
+              Click a profile to select and edit it.
+            </p>
+          </div>
+
+          <div class="installations-actions">
+            <button id="newModpackBtn" class="mcbtn installations-side-btn green" type="button">
+              Modpack
+            </button>
+            <button
+              id="importShareCodeBtn"
+              class="mcbtn installations-side-btn"
+              type="button"
+              data-simple="Paste code"
+            >
+              Import code
+            </button>
           </div>
 
           <button id="newProfileBtn" class="primary mcbtn">New Installation</button>
@@ -248,20 +278,47 @@
         <div class="settings-header">
           <div class="settings-title-block">
             <h2 class="mct whitetext shadow">Settings</h2>
-            <p class="whitetext mcr">Launcher and game preferences. Click a row to toggle it.</p>
+            <p
+              class="whitetext mcr"
+              data-simple="Change how the launcher works. Click a row to switch it on or off."
+            >
+              Launcher and game preferences. Click a row to toggle it.
+            </p>
           </div>
           <button id="saveSettingsBtn" class="primary mcbtn mcr">Save Settings</button>
         </div>
 
         <div class="settings-content midtext">
-          <p class="whitetext mct">Launcher Settings</p>
+          <label class="settings-row settings-row-toggle simple-only">
+            <div>
+              <p class="settings-row-title whitetext mct">Baby Mode is on</p>
+              <p class="settings-row-desc whitetext mcr">
+                The launcher only shows the basics. Switch this off to see every option again.
+              </p>
+            </div>
+
+            <span class="block-switch">
+              <input id="settingSimpleModeExit" type="checkbox" checked />
+              <span class="block-switch-track">
+                <span class="block-switch-knob"></span>
+              </span>
+            </span>
+          </label>
+
+          <p class="whitetext mct" data-simple="Launcher">Launcher Settings</p>
 
           <label class="settings-row settings-row-toggle">
             <div>
-              <p class="settings-row-title whitetext mct">
+              <p
+                class="settings-row-title whitetext mct"
+                data-simple="Keep the launcher open while playing"
+              >
                 Don&apos;t Close Launcher When Launched
               </p>
-              <p class="settings-row-desc whitetext mcr">
+              <p
+                class="settings-row-desc whitetext mcr"
+                data-simple="If this is off, the launcher closes when the game starts."
+              >
                 Keeps the launcher open after Minecraft starts. Default: on.
               </p>
             </div>
@@ -274,7 +331,7 @@
             </span>
           </label>
 
-          <label class="settings-row settings-row-toggle">
+          <label class="settings-row settings-row-toggle" data-advanced>
             <div>
               <p class="settings-row-title whitetext mct">Open Console On Launch</p>
               <p class="settings-row-desc whitetext mcr">
@@ -292,8 +349,11 @@
 
           <div class="settings-row">
             <div>
-              <p class="settings-row-title whitetext mct">Home Widgets</p>
-              <p class="settings-row-desc whitetext mcr">
+              <p class="settings-row-title whitetext mct" data-simple="Home screen">Home Widgets</p>
+              <p
+                class="settings-row-desc whitetext mcr"
+                data-simple="Pick what shows on the home screen."
+              >
                 Choose which widgets show on Home, change their options and reorder them.
               </p>
             </div>
@@ -303,7 +363,7 @@
             </button>
           </div>
 
-          <div class="settings-row">
+          <div class="settings-row" data-advanced>
             <div>
               <p class="settings-row-title whitetext mct">
                 Data Folder
@@ -323,8 +383,13 @@
 
           <div class="settings-row">
             <div>
-              <p class="settings-row-title whitetext mct">Welcome Setup</p>
-              <p class="settings-row-desc whitetext mcr">
+              <p class="settings-row-title whitetext mct" data-simple="Setup again">
+                Welcome Setup
+              </p>
+              <p
+                class="settings-row-desc whitetext mcr"
+                data-simple="Go through the first-start steps again."
+              >
                 Run the first-start setup again: sign in, pick an installation, launcher behaviour.
               </p>
             </div>
@@ -334,14 +399,28 @@
             </button>
           </div>
 
+          <div class="settings-row" data-advanced>
+            <div>
+              <p class="settings-row-title whitetext mct">Shared Folders</p>
+              <p class="settings-row-desc whitetext mcr">
+                <span id="sharedFoldersSummary">Loading...</span><br />
+                Pick which folders every installation shares, so worlds and packs are never copied.
+              </p>
+            </div>
+
+            <button id="openSharedFoldersBtn" class="mcbtn mcr settings-row-btn" type="button">
+              Manage
+            </button>
+          </div>
+
           <p class="whitetext mct">Updates</p>
 
-          <label class="settings-row settings-row-toggle">
+          <label class="settings-row settings-row-toggle" data-advanced>
             <div>
               <p class="settings-row-title whitetext mct">Auto-update Launcher</p>
               <p class="settings-row-desc whitetext mcr">
-                Check for new launcher versions on start, download them in the background and
-                install when you close the launcher. Works for the installer and the portable .exe.
+                Check for a new launcher version on start and ask if you want to update. When off,
+                only Check now looks for updates. Works for the installer and the portable .exe.
               </p>
             </div>
 
@@ -353,7 +432,7 @@
             </span>
           </label>
 
-          <label class="settings-row settings-row-toggle">
+          <label class="settings-row settings-row-toggle" data-advanced>
             <div>
               <p class="settings-row-title whitetext mct">Auto-update Client</p>
               <p class="settings-row-desc whitetext mcr">
@@ -371,7 +450,9 @@
 
           <div class="settings-row">
             <div>
-              <p class="settings-row-title whitetext mct">Check for Updates</p>
+              <p class="settings-row-title whitetext mct" data-simple="Update the launcher">
+                Check for Updates
+              </p>
               <p id="settingsUpdateStatus" class="settings-row-desc whitetext mcr">
                 Checks the launcher and the client now, even when auto-update is off.
               </p>
@@ -382,8 +463,8 @@
             </button>
           </div>
 
-          <p class="whitetext mct">Minecraft: Java Edition Settings</p>
-          <label class="settings-row settings-row-toggle">
+          <p class="whitetext mct" data-advanced>Minecraft: Java Edition Settings</p>
+          <label class="settings-row settings-row-toggle" data-advanced>
             <div>
               <p class="settings-row-title whitetext mct">SMP mode</p>
               <p class="settings-row-desc whitetext mcr">
@@ -420,6 +501,85 @@
             </p>
           </div>
 
+          <p class="whitetext mct">Baby Mode</p>
+
+          <label class="settings-row settings-row-toggle">
+            <div>
+              <p class="settings-row-title whitetext mct">Baby Mode</p>
+              <p class="settings-row-desc whitetext mcr">
+                Strips the launcher down to the basics with plain words: no console, changelog, Java
+                paths, arguments, folders or other technical options. Settings gets a switch to turn
+                it off.
+              </p>
+            </div>
+
+            <span class="block-switch">
+              <input id="devSimpleMode" type="checkbox" />
+              <span class="block-switch-track">
+                <span class="block-switch-knob"></span>
+              </span>
+            </span>
+          </label>
+
+          <p class="whitetext mct">Versions</p>
+
+          <div class="settings-row dev-info-row">
+            <dl id="devVersionList" class="dev-info-list">
+              <div>
+                <dt class="mcr">Launcher</dt>
+                <dd class="mct whitetext" data-info="launcher">…</dd>
+              </div>
+              <div>
+                <dt class="mcr">Eclipse client</dt>
+                <dd class="mct whitetext" data-info="client">…</dd>
+              </div>
+              <div>
+                <dt class="mcr">Build</dt>
+                <dd class="mct whitetext" data-info="build">…</dd>
+              </div>
+              <div>
+                <dt class="mcr">Electron</dt>
+                <dd class="mct whitetext" data-info="electron">…</dd>
+              </div>
+              <div>
+                <dt class="mcr">Chromium</dt>
+                <dd class="mct whitetext" data-info="chrome">…</dd>
+              </div>
+              <div>
+                <dt class="mcr">Node</dt>
+                <dd class="mct whitetext" data-info="node">…</dd>
+              </div>
+              <div>
+                <dt class="mcr">System</dt>
+                <dd class="mct whitetext" data-info="system">…</dd>
+              </div>
+              <div>
+                <dt class="mcr">Account</dt>
+                <dd class="mct whitetext" data-info="account">…</dd>
+              </div>
+              <div class="wide">
+                <dt class="mcr">Data folder</dt>
+                <dd class="mcr whitetext" data-info="dataDir">…</dd>
+              </div>
+              <div class="wide">
+                <dt class="mcr">Executable</dt>
+                <dd class="mcr whitetext" data-info="executable">…</dd>
+              </div>
+            </dl>
+          </div>
+
+          <div class="settings-row">
+            <div>
+              <p class="settings-row-title whitetext mct">Copy Diagnostics</p>
+              <p class="settings-row-desc whitetext mcr">
+                Copies versions, paths and the last 200 console lines, for bug reports.
+              </p>
+            </div>
+            <button id="devCopyDiagnosticsBtn" class="mcbtn mcr settings-row-btn" type="button">
+              Copy
+            </button>
+          </div>
+
           <p class="whitetext mct">Offline Account</p>
 
           <div class="settings-row dev-offline-row">
@@ -450,6 +610,81 @@
           <p id="devOfflineStatus" class="dev-status mcr"></p>
 
           <p class="whitetext mct">Tools</p>
+
+          <div class="settings-row">
+            <div>
+              <p class="settings-row-title whitetext mct">Developer Tools</p>
+              <p class="settings-row-desc whitetext mcr">
+                Opens Chromium DevTools for the launcher window.
+              </p>
+            </div>
+            <button id="devOpenDevToolsBtn" class="mcbtn mcr settings-row-btn" type="button">
+              Open
+            </button>
+          </div>
+
+          <div class="settings-row">
+            <div>
+              <p class="settings-row-title whitetext mct">Folders</p>
+              <p class="settings-row-desc whitetext mcr">
+                Open the launcher's data folder or its log folder.
+              </p>
+            </div>
+            <div class="dev-button-pair">
+              <button id="devOpenDataBtn" class="mcbtn mcr settings-row-btn" type="button">
+                Data
+              </button>
+              <button id="devOpenLogsBtn" class="mcbtn mcr settings-row-btn" type="button">
+                Logs
+              </button>
+            </div>
+          </div>
+
+          <div class="settings-row">
+            <div>
+              <p class="settings-row-title whitetext mct">Preview Update Popup</p>
+              <p class="settings-row-desc whitetext mcr">
+                Shows the "update available" popup without downloading anything.
+              </p>
+            </div>
+            <button id="devPreviewUpdateBtn" class="mcbtn mcr settings-row-btn" type="button">
+              Show
+            </button>
+          </div>
+
+          <div class="settings-row">
+            <div>
+              <p class="settings-row-title whitetext mct">Test Dialogs</p>
+              <p class="settings-row-desc whitetext mcr">
+                Shows the info, error and confirm dialogs one after another.
+              </p>
+            </div>
+            <button id="devTestDialogsBtn" class="mcbtn mcr settings-row-btn" type="button">
+              Show
+            </button>
+          </div>
+
+          <div class="settings-row">
+            <div>
+              <p class="settings-row-title whitetext mct">Refresh Widgets</p>
+              <p class="settings-row-desc whitetext mcr">
+                Clears the server, PvPHQ and version caches and reloads every widget.
+              </p>
+            </div>
+            <button id="devRefreshWidgetsBtn" class="mcbtn mcr settings-row-btn" type="button">
+              Refresh
+            </button>
+          </div>
+
+          <div class="settings-row">
+            <div>
+              <p class="settings-row-title whitetext mct">Restart Launcher</p>
+              <p class="settings-row-desc whitetext mcr">Fully closes and reopens the launcher.</p>
+            </div>
+            <button id="devRelaunchBtn" class="mcbtn mcr settings-row-btn danger" type="button">
+              Restart
+            </button>
+          </div>
 
           <div class="settings-row">
             <div>
@@ -588,6 +823,16 @@
           </button>
 
           <button class="linebtn editor-tab-btn" data-editor-tab="mods" type="button">Mods</button>
+          <button
+            class="linebtn editor-tab-btn"
+            data-editor-tab="folders"
+            type="button"
+            data-advanced
+          >
+            Shared files
+          </button>
+
+          <button id="shareInstallationBtn" class="linebtn" type="button">Share</button>
 
           <button id="saveInstallationBtn" class="linebtn" type="button">Save</button>
 
@@ -604,13 +849,13 @@
             </label>
 
             <label>
-              <span class="whitetext mcr">Minecraft Version</span>
+              <span class="whitetext mcr" data-simple="Game version">Minecraft Version</span>
               <select id="editorSettingMcVersion" class="editor-input">
                 <option value="">Loading versions...</option>
               </select>
             </label>
 
-            <label class="editor-checkbox-row">
+            <label class="editor-checkbox-row" data-advanced>
               <span class="whitetext mcr">Show snapshots</span>
               <span class="block-switch">
                 <input id="editorShowSnapshots" type="checkbox" />
@@ -620,7 +865,7 @@
               </span>
             </label>
 
-            <label>
+            <label data-advanced>
               <span class="whitetext mcr">Version Type</span>
               <select id="editorSettingVersionType" class="editor-input">
                 <option value="release">release</option>
@@ -629,7 +874,7 @@
             </label>
 
             <label>
-              <span class="whitetext mcr">Loader</span>
+              <span class="whitetext mcr" data-simple="Mod loader">Loader</span>
               <select id="editorSettingLoader" class="editor-input">
                 <option value="vanilla">vanilla</option>
                 <option value="fabric">fabric</option>
@@ -640,42 +885,42 @@
               </select>
             </label>
 
-            <label>
+            <label data-advanced>
               <span class="whitetext mcr">Custom Version ID</span>
               <input id="editorSettingCustomVersionId" class="editor-input" />
             </label>
 
-            <label>
+            <label data-advanced>
               <span class="whitetext mcr">Custom JSON Path</span>
               <input id="editorSettingCustomJson" class="editor-input" />
             </label>
 
-            <label>
+            <label data-advanced>
               <span class="whitetext mcr">Game Directory</span>
               <input id="editorSettingGameDir" class="editor-input" />
             </label>
 
-            <label>
+            <label data-advanced>
               <span class="whitetext mcr">Java Path</span>
               <input id="editorSettingJavaPath" class="editor-input" />
             </label>
 
-            <label>
+            <label data-advanced>
               <span class="whitetext mcr">Min Memory</span>
               <input id="editorSettingMinMemory" class="editor-input" />
             </label>
 
             <label>
-              <span class="whitetext mcr">Max Memory</span>
+              <span class="whitetext mcr" data-simple="Memory (RAM)">Max Memory</span>
               <input id="editorSettingMaxMemory" class="editor-input" />
             </label>
 
-            <label>
+            <label data-advanced>
               <span class="whitetext mcr">Width</span>
               <input id="editorSettingWidth" class="editor-input" type="number" />
             </label>
 
-            <label>
+            <label data-advanced>
               <span class="whitetext mcr">Height</span>
               <input id="editorSettingHeight" class="editor-input" type="number" />
             </label>
@@ -690,20 +935,46 @@
               </span>
             </label>
 
-            <label>
+            <label data-advanced>
               <span class="whitetext mcr">Extra JVM Args</span>
               <input id="editorSettingJvmArgs" class="editor-input" />
             </label>
 
-            <label>
+            <label data-advanced>
               <span class="whitetext mcr">Extra Minecraft Args</span>
               <input id="editorSettingMcArgs" class="editor-input" />
             </label>
           </div>
         </section>
 
+        <section id="editor-tab-folders" class="editor-subpage">
+          <label class="editor-folder-row editor-folder-master">
+            <span class="editor-folder-text">
+              <span class="editor-folder-name mct whitetext">Use shared folders</span>
+              <span class="editor-folder-sub mcr">
+                Off gives this installation its own separate folders. You can also pick single
+                folders below.
+              </span>
+            </span>
+            <span class="block-switch">
+              <input id="editorUseSharedFolders" type="checkbox" />
+              <span class="block-switch-track">
+                <span class="block-switch-knob"></span>
+              </span>
+            </span>
+          </label>
+
+          <p id="editorFoldersNote" class="editor-folders-note mcr"></p>
+
+          <div id="editorFoldersList" class="editor-folders-list"></div>
+
+          <button id="editorManageSharedBtn" class="mcbtn mcr" type="button">
+            Manage shared folders
+          </button>
+        </section>
+
         <section id="editor-tab-mods" class="editor-subpage">
-          <div class="editor-modrinth-update-row">
+          <div class="editor-modrinth-update-row" data-advanced>
             <div class="editor-modrinth-copy">
               <p class="settings-row-title whitetext mct">Modrinth Collection</p>
               <p class="settings-row-desc whitetext mcr">
@@ -729,9 +1000,33 @@
             class="editor-modrinth-update-status whitetext mcr"
           ></div>
 
-          <div id="editorModsDropZone" class="mods-drop-zone mcr">Drop .jar mods here</div>
+          <div id="editorModsDropZone" class="mods-drop-zone mcr" data-simple="Drag mod files here">
+            Drop .jar mods here
+          </div>
 
-          <button id="addEditorModsBtn" class="mcbtn mcr" type="button">Add Mods</button>
+          <div class="editor-mods-actions">
+            <button id="addEditorModsBtn" class="mcbtn mcr" type="button">Add Mods</button>
+            <button
+              id="browseModrinthBtn"
+              class="mcbtn mcr green"
+              type="button"
+              data-simple="Find mods"
+            >
+              Browse Modrinth
+            </button>
+          </div>
+
+          <div class="editor-mods-search-row">
+            <input
+              id="editorModsSearch"
+              class="settings-text-input editor-mods-search"
+              type="search"
+              placeholder="Search installed mods..."
+              autocomplete="off"
+              spellcheck="false"
+            />
+            <span id="editorModsCount" class="editor-mods-count mcr"></span>
+          </div>
 
           <div id="editorModsList" class="editor-mods-list"></div>
         </section>
@@ -844,6 +1139,35 @@
         </div>
       </div>
     </div>
+
+    <template id="accountMenuItemTemplate">
+      <div class="account-menu-item" role="none">
+        <button class="account-menu-pick" data-action="pick" type="button" role="menuitem">
+          <img class="account-menu-head" src="./static/img/default_logged_out_head.png" alt="" />
+          <span class="account-menu-text">
+            <span class="account-menu-name mct whitetext"></span>
+            <span class="account-menu-sub mcr"></span>
+          </span>
+          <span class="mc-select-check" aria-hidden="true"></span>
+        </button>
+        <button
+          class="account-menu-remove home-widget-tool"
+          data-action="remove"
+          type="button"
+          title="Remove account"
+        >
+          ×
+        </button>
+      </div>
+    </template>
+
+    <template id="accountMenuFooterTemplate">
+      <div class="account-menu-footer">
+        <button class="account-menu-add mcr" data-action="add" type="button">
+          + Add Microsoft account
+        </button>
+      </div>
+    </template>
 
     <template id="mcSelectTemplate">
       <div class="mc-select">
@@ -1006,15 +1330,31 @@
 
     <template id="widget-tpl-pvphq">
       <div class="widget-pvphq">
-        <div class="widget-pvphq-top" data-slot="top">
-          <span class="widget-pvphq-tier mct" data-slot="tier">…</span>
-          <span class="widget-pvphq-ident">
-            <span class="widget-pvphq-ladder mct whitetext" data-slot="ladder"></span>
-            <span class="widget-pvphq-player mcr" data-slot="player"></span>
-          </span>
-          <span class="widget-pvphq-position mct" data-slot="position"></span>
+        <div class="pvphq-head" data-slot="top">
+          <div class="pvphq-identity">
+            <p class="pvphq-name mct whitetext" data-slot="name"></p>
+            <p class="pvphq-sub mcr" data-slot="sub"></p>
+          </div>
+          <div class="pvphq-score">
+            <p class="pvphq-score-value mct" data-slot="score"></p>
+            <p class="pvphq-score-label mcr" data-slot="scoreLabel"></p>
+          </div>
         </div>
-        <div class="widget-pvphq-stats" data-slot="stats"></div>
+
+        <div class="pvphq-facts" data-slot="stats"></div>
+
+        <div class="pvphq-winrate" data-slot="winrate">
+          <div class="pvphq-winrate-top">
+            <span class="mcr">Win rate</span>
+            <span class="mct whitetext" data-slot="winrateValue"></span>
+          </div>
+          <div class="pvphq-winbar" data-slot="winbar"></div>
+          <p class="pvphq-record mct">
+            <span class="pvphq-wins" data-slot="wins"></span>
+            <span class="pvphq-losses" data-slot="losses"></span>
+          </p>
+        </div>
+
         <div class="widget-pvphq-chips" data-slot="chips"></div>
         <p class="widget-pvphq-footer mcr" data-slot="footer"></p>
         <p class="widget-empty mcr hidden" data-slot="message"></p>
@@ -1022,10 +1362,17 @@
     </template>
 
     <template id="widget-row-tpl-pvphq-stat">
-      <div class="widget-pvphq-stat">
-        <span class="widget-pvphq-stat-label mcr" data-slot="label"></span>
-        <span class="widget-pvphq-stat-value mct whitetext" data-slot="value"></span>
+      <div class="pvphq-fact">
+        <span class="pvphq-fact-value mct whitetext" data-slot="value"></span>
+        <span class="pvphq-fact-label mcr" data-slot="label"></span>
       </div>
+    </template>
+
+    <template id="widget-row-tpl-pvphq-tier">
+      <span class="pvphq-tier-pair">
+        <span class="pvphq-tier-badge mct" data-slot="tier"></span>
+        <span class="pvphq-tier-kit mct whitetext" data-slot="kit"></span>
+      </span>
     </template>
 
     <template id="widget-row-tpl-pvphq-chip">
@@ -1049,8 +1396,8 @@
         <label class="widget-field">
           <span class="mcr">Ladder</span>
           <select data-setting="ladder">
-            <option value="best">Best ladder</option>
-            <option value="global">Global overview</option>
+            <option value="global">Overview (all kits)</option>
+            <option value="best">Best kit</option>
             <option value="SWORD">Sword</option>
             <option value="AXE">Axe</option>
             <option value="UHC">UHC</option>
@@ -1247,6 +1594,420 @@
           <input type="checkbox" data-setting="showName" />
           <span class="mcr">Show player name</span>
         </label>
+      </div>
+    </template>
+
+    <div
+      id="launcherUpdateBackdrop"
+      class="java-prompt-backdrop hidden"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="launcherUpdateTitle"
+    >
+      <div class="java-prompt launcher-update-prompt mcsection">
+        <p id="launcherUpdateTitle" class="java-prompt-title launcher-update-title mct whitetext">
+          Update available
+        </p>
+        <p id="launcherUpdateText" class="java-prompt-text mcr"></p>
+        <p id="launcherUpdateQuestion" class="java-prompt-question mct whitetext">
+          Would you like to update now?
+        </p>
+
+        <div id="launcherUpdateProgress" class="java-prompt-progress hidden">
+          <div class="java-prompt-bar"><span id="launcherUpdateBar"></span></div>
+          <p id="launcherUpdateProgressText" class="java-prompt-progress-text mcr"></p>
+        </div>
+
+        <p id="launcherUpdateError" class="java-prompt-error mcr hidden"></p>
+
+        <div class="java-prompt-buttons">
+          <button id="launcherUpdateNoBtn" class="mcbtn mcr" type="button">No</button>
+          <button id="launcherUpdateYesBtn" class="mcbtn mcr green" type="button">
+            Yes, update
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <div
+      id="modrinthBackdrop"
+      class="java-prompt-backdrop modrinth-backdrop hidden"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="modrinthTitle"
+    >
+      <div class="modrinth-browser mcsection">
+        <div class="modrinth-top">
+          <div class="modrinth-heading">
+            <p id="modrinthTitle" class="modrinth-title mct whitetext">Modrinth</p>
+            <p id="modrinthTarget" class="modrinth-target mcr"></p>
+          </div>
+          <div class="modrinth-top-buttons">
+            <button id="modrinthImportFileBtn" class="mcbtn mcr hidden" type="button">
+              Import .mrpack
+            </button>
+            <button id="modrinthCloseBtn" class="mcbtn mcr" type="button">Done</button>
+          </div>
+        </div>
+
+        <div class="modrinth-search-row">
+          <input
+            id="modrinthSearchInput"
+            class="settings-text-input modrinth-search-input"
+            type="search"
+            placeholder="Search mods..."
+            autocomplete="off"
+            spellcheck="false"
+          />
+          <select id="modrinthSortSelect" class="modrinth-sort">
+            <option value="relevance">Relevance</option>
+            <option value="downloads">Downloads</option>
+            <option value="follows">Follows</option>
+            <option value="newest">Newest</option>
+            <option value="updated">Updated</option>
+          </select>
+        </div>
+
+        <p id="modrinthStatus" class="modrinth-status mcr"></p>
+
+        <div id="modrinthResults" class="modrinth-results"></div>
+
+        <div class="modrinth-pager">
+          <button id="modrinthPrevBtn" class="mcbtn mcr" type="button">Previous</button>
+          <span id="modrinthPageLabel" class="modrinth-page-label mcr"></span>
+          <button id="modrinthNextBtn" class="mcbtn mcr" type="button">Next</button>
+        </div>
+      </div>
+    </div>
+
+    <div
+      id="sharedFoldersBackdrop"
+      class="java-prompt-backdrop shared-folders-backdrop hidden"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="sharedFoldersTitle"
+    >
+      <div class="shared-folders-menu mcsection">
+        <div class="modrinth-top">
+          <div class="modrinth-heading">
+            <p id="sharedFoldersTitle" class="shared-folders-title mct whitetext">Shared Folders</p>
+            <p class="modrinth-target mcr">
+              Turned on folders are the same in every installation. Installations can opt out in
+              their own Shared files tab.
+            </p>
+          </div>
+          <button id="sharedFoldersCloseBtn" class="mcbtn mcr" type="button">Done</button>
+        </div>
+
+        <label class="shared-master-row" for="settingSharedFolders">
+          <span>
+            <span class="shared-master-title mct whitetext"
+              >Share folders between installations</span
+            >
+            <span class="shared-master-desc mcr"
+              >Files already in an installation are moved into the shared folder, never
+              deleted.</span
+            >
+          </span>
+          <span class="block-switch">
+            <input id="settingSharedFolders" type="checkbox" />
+            <span class="block-switch-track">
+              <span class="block-switch-knob"></span>
+            </span>
+          </span>
+        </label>
+
+        <div class="shared-location-row">
+          <div class="shared-location-text">
+            <span class="shared-master-title mct whitetext">Location</span>
+            <span id="sharedFoldersRoot" class="shared-folder-path mcr">Loading...</span>
+          </div>
+          <div class="shared-folder-actions">
+            <button id="sharedFoldersOpenRootBtn" class="mcbtn mcr shared-folder-btn" type="button">
+              Open
+            </button>
+            <button
+              id="sharedFoldersChooseRootBtn"
+              class="mcbtn mcr shared-folder-btn"
+              type="button"
+            >
+              Change
+            </button>
+            <button
+              id="sharedFoldersResetRootBtn"
+              class="mcbtn mcr shared-folder-btn hidden"
+              type="button"
+            >
+              Default
+            </button>
+          </div>
+        </div>
+
+        <div id="sharedFoldersList" class="shared-folders-list"></div>
+
+        <form id="sharedFoldersAddForm" class="shared-add-row" autocomplete="off">
+          <input
+            id="sharedFoldersAddName"
+            class="settings-text-input shared-add-input"
+            type="text"
+            maxlength="64"
+            placeholder="Folder name, e.g. XaeroWorldMap"
+            spellcheck="false"
+          />
+          <input
+            id="sharedFoldersAddLabel"
+            class="settings-text-input shared-add-input"
+            type="text"
+            maxlength="40"
+            placeholder="Display name (optional)"
+            spellcheck="false"
+          />
+          <button id="sharedFoldersAddBtn" class="mcbtn mcr green shared-add-btn" type="submit">
+            Add folder
+          </button>
+        </form>
+
+        <p id="sharedFoldersStatus" class="shared-folders-status mcr"></p>
+      </div>
+    </div>
+
+    <template id="sharedFolderRowTemplate">
+      <div class="shared-folder-row">
+        <div class="shared-folder-main">
+          <div class="shared-folder-name-line">
+            <input
+              class="shared-folder-label mct"
+              data-field="label"
+              type="text"
+              maxlength="40"
+              spellcheck="false"
+              aria-label="Display name"
+            />
+            <span class="shared-folder-id mcr" data-field="id"></span>
+            <span class="shared-folder-tag mcr hidden" data-field="custom">custom</span>
+          </div>
+          <span class="shared-folder-desc mcr" data-field="description"></span>
+          <span class="shared-folder-path mcr" data-field="path"></span>
+          <span class="shared-folder-actions">
+            <button class="mcbtn mcr shared-folder-btn" data-action="open" type="button">
+              Open
+            </button>
+            <button class="mcbtn mcr shared-folder-btn" data-action="choose" type="button">
+              Choose folder
+            </button>
+            <button class="mcbtn mcr shared-folder-btn" data-action="reset" type="button">
+              Use default
+            </button>
+            <button class="mcbtn mcr shared-folder-btn danger" data-action="remove" type="button">
+              Remove
+            </button>
+          </span>
+        </div>
+
+        <label class="block-switch shared-folder-switch">
+          <input type="checkbox" aria-label="Shared" />
+          <span class="block-switch-track">
+            <span class="block-switch-knob"></span>
+          </span>
+        </label>
+      </div>
+    </template>
+
+    <template id="editorFolderRowTemplate">
+      <label class="editor-folder-row">
+        <span class="editor-folder-text">
+          <span class="editor-folder-name mct whitetext" data-field="label"></span>
+          <span class="editor-folder-sub mcr" data-field="sub"></span>
+        </span>
+        <span class="block-switch">
+          <input type="checkbox" />
+          <span class="block-switch-track">
+            <span class="block-switch-knob"></span>
+          </span>
+        </span>
+      </label>
+    </template>
+
+    <div
+      id="modpackInstallBackdrop"
+      class="java-prompt-backdrop hidden"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="modpackInstallTitle"
+    >
+      <div class="java-prompt modrinth-deps mcsection">
+        <p id="modpackInstallTitle" class="java-prompt-title modrinth-deps-title mct whitetext">
+          Install modpack
+        </p>
+        <p id="modpackInstallText" class="java-prompt-text mcr"></p>
+
+        <label id="modpackVersionField" class="dialog-field">
+          <span class="dialog-field-label mcr">Version</span>
+          <select id="modpackVersionSelect"></select>
+        </label>
+
+        <label class="dialog-field">
+          <span class="dialog-field-label mcr">Installation name</span>
+          <input
+            id="modpackNameInput"
+            class="settings-text-input dialog-field-input"
+            type="text"
+            maxlength="80"
+            spellcheck="false"
+          />
+        </label>
+
+        <div id="modpackInstallProgress" class="java-prompt-progress hidden">
+          <div class="java-prompt-bar"><span id="modpackInstallBar"></span></div>
+          <p id="modpackInstallProgressText" class="java-prompt-progress-text mcr"></p>
+        </div>
+
+        <p id="modpackInstallError" class="java-prompt-error mcr hidden"></p>
+
+        <div class="java-prompt-buttons">
+          <button id="modpackInstallCancelBtn" class="mcbtn mcr" type="button">Cancel</button>
+          <button id="modpackInstallBtn" class="mcbtn mcr green" type="button">Install</button>
+        </div>
+      </div>
+    </div>
+
+    <div
+      id="shareBackdrop"
+      class="java-prompt-backdrop hidden"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="shareTitle"
+    >
+      <div class="java-prompt share-dialog mcsection">
+        <p id="shareTitle" class="java-prompt-title share-title mct whitetext">
+          Share installation
+        </p>
+        <p class="java-prompt-text mcr">
+          Copy this code and send it to a friend. They paste it in Installations → Import code to
+          get the same version, settings, options and mods.
+        </p>
+
+        <ul id="shareSummary" class="share-summary mcr"></ul>
+
+        <label class="share-check-row">
+          <input id="shareIncludeConfigs" type="checkbox" checked />
+          <span class="mc-check-box" aria-hidden="true"></span>
+          <span class="mcr">Include mod configs (config folder)</span>
+        </label>
+
+        <textarea id="shareCodeText" class="share-code mcr" readonly spellcheck="false"></textarea>
+
+        <p id="shareMissing" class="java-prompt-note mcr"></p>
+        <p id="shareError" class="java-prompt-error mcr hidden"></p>
+
+        <div class="java-prompt-buttons">
+          <button id="shareCloseBtn" class="mcbtn mcr" type="button">Close</button>
+          <button id="shareCopyBtn" class="mcbtn mcr green" type="button">Copy code</button>
+        </div>
+      </div>
+    </div>
+
+    <div
+      id="importShareBackdrop"
+      class="java-prompt-backdrop hidden"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="importShareTitle"
+    >
+      <div class="java-prompt share-dialog mcsection">
+        <p id="importShareTitle" class="java-prompt-title share-title mct whitetext">
+          Import installation
+        </p>
+        <p class="java-prompt-text mcr">
+          Paste a share code. A new installation is made with the same settings, and the mods are
+          downloaded from Modrinth.
+        </p>
+
+        <textarea
+          id="importShareText"
+          class="share-code mcr"
+          spellcheck="false"
+          placeholder="ECLIPSE-SHARE-1:..."
+        ></textarea>
+
+        <ul id="importShareSummary" class="share-summary mcr"></ul>
+
+        <label id="importShareNameField" class="dialog-field hidden">
+          <span class="dialog-field-label mcr">Installation name</span>
+          <input
+            id="importShareName"
+            class="settings-text-input dialog-field-input"
+            type="text"
+            maxlength="80"
+            spellcheck="false"
+          />
+        </label>
+
+        <div id="importShareProgress" class="java-prompt-progress hidden">
+          <div class="java-prompt-bar"><span id="importShareBar"></span></div>
+          <p id="importShareProgressText" class="java-prompt-progress-text mcr"></p>
+        </div>
+
+        <p id="importShareNote" class="java-prompt-note mcr"></p>
+        <p id="importShareError" class="java-prompt-error mcr hidden"></p>
+
+        <div class="java-prompt-buttons">
+          <button id="importShareCancelBtn" class="mcbtn mcr" type="button">Cancel</button>
+          <button id="importShareBtn" class="mcbtn mcr green" type="button" disabled>Import</button>
+        </div>
+      </div>
+    </div>
+
+    <div
+      id="modrinthDepsBackdrop"
+      class="java-prompt-backdrop modrinth-deps-backdrop hidden"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="modrinthDepsTitle"
+    >
+      <div class="java-prompt modrinth-deps mcsection">
+        <p id="modrinthDepsTitle" class="java-prompt-title modrinth-deps-title mct whitetext">
+          Required mods
+        </p>
+        <p id="modrinthDepsText" class="java-prompt-text mcr"></p>
+        <div id="modrinthDepsList" class="modrinth-deps-list"></div>
+        <p id="modrinthDepsNote" class="java-prompt-note mcr"></p>
+        <div class="java-prompt-buttons">
+          <button id="modrinthDepsCancelBtn" class="mcbtn mcr" type="button">Cancel</button>
+          <button id="modrinthDepsInstallBtn" class="mcbtn mcr green" type="button">Install</button>
+        </div>
+      </div>
+    </div>
+
+    <template id="modrinthDepRowTemplate">
+      <label class="modrinth-dep-row">
+        <input type="checkbox" class="modrinth-dep-check" />
+        <span class="mc-check-box" aria-hidden="true"></span>
+        <img class="modrinth-dep-icon" alt="" />
+        <span class="modrinth-dep-text">
+          <span class="modrinth-dep-name mct whitetext" data-field="title"></span>
+          <span class="modrinth-dep-sub mcr" data-field="sub"></span>
+        </span>
+        <span class="modrinth-dep-badge mcr" data-field="badge"></span>
+      </label>
+    </template>
+
+    <template id="modrinthResultTemplate">
+      <div class="modrinth-result">
+        <img class="modrinth-icon" alt="" loading="lazy" />
+        <div class="modrinth-info">
+          <p class="modrinth-name mct whitetext">
+            <span data-field="title"></span> <small data-field="author"></small>
+          </p>
+          <p class="modrinth-desc mcr" data-field="description"></p>
+          <p class="modrinth-meta mcr">
+            <span data-field="downloads"></span><span data-field="categories"></span>
+          </p>
+        </div>
+        <div class="modrinth-action">
+          <button class="mcbtn mcr green modrinth-install-btn" type="button">Install</button>
+          <div class="modrinth-install-bar hidden"><span></span></div>
+        </div>
       </div>
     </template>
 
