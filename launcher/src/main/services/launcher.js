@@ -1166,6 +1166,16 @@ async function launch(profileId, window) {
 
     instances.delete(instance.instanceId);
 
+    if (!isRunning(instance.profileId)) {
+      try {
+        const returned = sharedFolders.returnBorrowed(profile.gameDir);
+        returned.logs.forEach((line) => log(`[shared] ${line}`));
+        returned.errors.forEach((line) => log(`[shared] Could not move back ${line}`));
+      } catch (error) {
+        log(`[shared] Could not move shared folders back: ${error.message || error}`);
+      }
+    }
+
     if (window && !window.isDestroyed()) {
       window.webContents.send("game:close", {
         instanceId: instance.instanceId,
@@ -1195,6 +1205,8 @@ async function launch(profileId, window) {
       const shared = sharedFolders.applyToGameDir(profile.gameDir, {
         profileId: profile.id,
         unlinkDisabled: false,
+        borrow: true,
+        isBusy: (id) => id !== profile.id && isRunning(id),
       });
       shared.logs.forEach((line) => log(`[shared] ${line}`));
       shared.errors.forEach((line) => log(`[shared] Could not share ${line}`));

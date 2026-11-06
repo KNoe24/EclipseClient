@@ -6039,3 +6039,17 @@ body.simple-mode [data-advanced] {
 .modrinth-heading {
   min-width: 0;
 }
+
+.shared-folders-mode-note {
+  margin: 0;
+  padding: 0.5rem 0.7rem;
+  background: #3a3216;
+  border: 0.125rem solid #6b5a1f;
+  color: #ffd76a;
+  font-size: 0.8rem;
+  line-height: 1.35;
+}
+
+.shared-folders-mode-note.hidden {
+  display: none;
+}

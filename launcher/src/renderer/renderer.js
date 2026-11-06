@@ -6848,6 +6848,7 @@ function renderSharedFolders() {
   if (root) root.textContent = state.root;
 
   $("#sharedFoldersResetRootBtn")?.classList.toggle("hidden", !state.customRoot);
+  $("#sharedFoldersModeNote")?.classList.toggle("hidden", state.linksSupported !== false);
   ["#sharedFoldersChooseRootBtn", "#sharedFoldersResetRootBtn", "#sharedFoldersAddBtn"].forEach(
     (selector) => {
       const button = $(selector);

@@ -905,6 +905,12 @@ function createWindow() {
 app.whenReady().then(async () => {
   Menu.setApplicationMenu(null);
 
+  try {
+    sharedFoldersService.recoverLeases();
+  } catch (error) {
+    console.error("Shared folder recovery failed:", error);
+  }
+
   await discordService.init();
 
   createWindow();
@@ -1447,6 +1453,7 @@ app.whenReady().then(async () => {
 
       const result = sharedFoldersService.applyToGameDir(profile.gameDir, {
         profileId: profile.id,
+        isBusy: (id) => launcherService.isRunning(id),
       });
       result.logs.forEach((line) => logs.push(`${profile.name}: ${line}`));
       result.errors.forEach((line) => errors.push(`${profile.name}: ${line}`));
@@ -1537,6 +1544,7 @@ app.whenReady().then(async () => {
       const result = sharedFoldersService.applyToGameDir(profile.gameDir, {
         profileId: profile.id,
         copyOnDetach: Boolean(options?.copy),
+        isBusy: (id) => launcherService.isRunning(id),
       });
 
       return { ...state, applied: { logs: result.logs, errors: result.errors, skipped: 0 } };

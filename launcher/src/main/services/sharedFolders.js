@@ -1,6 +1,8 @@
 const fs = require("fs");
 const path = require("path");
 
+const crypto = require("crypto");
+
 const storage = require("./storage");
 
 const CONFIG_FILE = "shared-folders.json";
@@ -47,7 +49,20 @@ const RESERVED_NAMES = new Set([
   "crash-reports",
 ]);
 
+const NO_LINK_CODES = new Set([
+  "EISDIR",
+  "EPERM",
+  "ENOTSUP",
+  "EINVAL",
+  "ENOSYS",
+  "EACCES",
+  "EIO",
+  "UNKNOWN",
+]);
+const LEASE_SUFFIX = ".eclipse-lease.json";
+
 let cached = null;
+const linkSupport = new Map();
 
 function defaultEntry(folder) {
   return {
@@ -236,6 +251,66 @@ function createLink(target, linkPath) {
   fs.symlinkSync(target, linkPath, process.platform === "win32" ? "junction" : "dir");
 }
 
+function supportsLinks(dir) {
+  const resolved = path.resolve(dir);
+  const key = process.platform === "win32" ? path.parse(resolved).root.toLowerCase() : resolved;
+
+  if (linkSupport.has(key)) return linkSupport.get(key);
+
+  const probeId = crypto.randomBytes(5).toString("hex");
+  const target = path.join(resolved, `.eclipse-link-target-${probeId}`);
+  const link = path.join(resolved, `.eclipse-link-probe-${probeId}`);
+  let supported = false;
+
+  try {
+    fs.mkdirSync(resolved, { recursive: true });
+    fs.mkdirSync(target);
+    createLink(target, link);
+    supported = Boolean(lstatOrNull(link)?.isSymbolicLink());
+  } catch (error) {
+    if (!NO_LINK_CODES.has(error.code)) {
+      supported = true;
+    }
+  } finally {
+    try {
+      if (lstatOrNull(link)?.isSymbolicLink()) fs.unlinkSync(link);
+      else if (fs.existsSync(link)) fs.rmdirSync(link);
+    } catch {}
+
+    try {
+      fs.rmdirSync(target);
+    } catch {}
+  }
+
+  linkSupport.set(key, supported);
+  return supported;
+}
+
+function leaseFile(target) {
+  return `${path.resolve(target)}${LEASE_SUFFIX}`;
+}
+
+function readLease(target) {
+  try {
+    const lease = JSON.parse(fs.readFileSync(leaseFile(target), "utf8"));
+    return lease && lease.gameDir ? lease : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeLease(target, lease) {
+  fs.writeFileSync(
+    leaseFile(target),
+    JSON.stringify({ ...lease, since: new Date().toISOString() }, null, 2),
+    "utf8"
+  );
+}
+
+function clearLease(target) {
+  fs.rmSync(leaseFile(target), { force: true });
+}
+
 function moveEntry(source, destination) {
   try {
     fs.renameSync(source, destination);
@@ -337,8 +412,121 @@ function linkFolder(gameDir, id, target, logs) {
   return "linked";
 }
 
+function returnFolder(holderGameDir, id, target, logs) {
+  const held = path.join(holderGameDir, id);
+  const stat = lstatOrNull(held);
+
+  if (stat?.isDirectory() && !stat.isSymbolicLink()) {
+    if (fs.existsSync(target)) {
+      mergeDirectoryInto(held, target, path.basename(holderGameDir) || "installation");
+      fs.rmdirSync(held);
+    } else {
+      fs.mkdirSync(path.dirname(target), { recursive: true });
+      moveEntry(held, target);
+    }
+
+    fs.mkdirSync(held, { recursive: true });
+  } else {
+    fs.mkdirSync(target, { recursive: true });
+  }
+
+  clearLease(target);
+  logs.push(`Moved ${id} back to the shared folder.`);
+}
+
+function moveModeFolder(gameDir, id, target, options, logs) {
+  const linkPath = path.join(gameDir, id);
+
+  if (samePath(linkPath, target)) {
+    fs.mkdirSync(target, { recursive: true });
+    return "self";
+  }
+
+  if (isInside(linkPath, target)) {
+    throw new Error(
+      `The shared ${id} folder cannot be inside this installation's own ${id} folder.`
+    );
+  }
+
+  const stat = lstatOrNull(linkPath);
+
+  if (stat?.isSymbolicLink()) {
+    fs.unlinkSync(linkPath);
+    fs.mkdirSync(linkPath, { recursive: true });
+  }
+
+  const lease = readLease(target);
+
+  if (lease && samePath(lease.gameDir, gameDir)) {
+    if (options.borrow || options.isBusy?.(lease.profileId)) return "held";
+
+    returnFolder(gameDir, id, target, logs);
+    return "returned";
+  }
+
+  if (lease) {
+    if (options.isBusy?.(lease.profileId)) {
+      if (options.borrow) {
+        logs.push(
+          `${id} is being used by another running installation, so this one uses its own ${id} folder this time.`
+        );
+      }
+      return "busy";
+    }
+
+    returnFolder(lease.gameDir, id, target, logs);
+  }
+
+  fs.mkdirSync(target, { recursive: true });
+
+  const own = lstatOrNull(linkPath);
+
+  if (own?.isDirectory() && fs.readdirSync(linkPath).length) {
+    const { moved, renamed } = mergeDirectoryInto(
+      linkPath,
+      target,
+      path.basename(gameDir) || "installation"
+    );
+    logs.push(
+      `Moved ${moved} item${moved === 1 ? "" : "s"} from ${id} into the shared folder${renamed ? ` (${renamed} renamed to avoid clashes)` : ""}.`
+    );
+  }
+
+  if (!options.borrow) return "stored";
+
+  if (fs.existsSync(linkPath)) fs.rmdirSync(linkPath);
+
+  moveEntry(target, linkPath);
+  writeLease(target, {
+    gameDir: path.resolve(gameDir),
+    profileId: options.profileId || "",
+    folder: id,
+  });
+  logs.push(
+    `Moved shared ${id} into this installation while it runs (this drive can't use folder links).`
+  );
+  return "borrowed";
+}
+
+function heldBy(gameDir, target) {
+  const lease = readLease(target);
+  return Boolean(lease && samePath(lease.gameDir, gameDir));
+}
+
 function unlinkFolder(gameDir, id, logs, options = {}) {
   const linkPath = path.join(gameDir, id);
+
+  if (options.target && heldBy(gameDir, options.target)) {
+    returnFolder(gameDir, id, options.target, logs);
+
+    if (options.copy && fs.existsSync(options.target)) {
+      fs.cpSync(options.target, linkPath, { recursive: true, force: false, errorOnExist: false });
+      logs.push(`Copied the shared ${id} files into this installation.`);
+    }
+
+    return true;
+  }
+
   const stat = lstatOrNull(linkPath);
 
   if (!stat?.isSymbolicLink()) return false;
@@ -369,15 +557,29 @@ function applyToGameDir(gameDir, options = {}) {
   const resolvedGameDir = path.resolve(gameDir);
   fs.mkdirSync(resolvedGameDir, { recursive: true });
 
+  const canLink = supportsLinks(resolvedGameDir);
+
   for (const entry of config.folders) {
     const shouldLink =
       config.enabled && entry.enabled && profile.useShared && !profile.separate.includes(entry.id);
+    const target = getFolderTarget(entry.id, config);
 
     try {
-      if (shouldLink) {
-        linkFolder(resolvedGameDir, entry.id, getFolderTarget(entry.id, config), logs);
-      } else if (options.unlinkDisabled !== false) {
-        unlinkFolder(resolvedGameDir, entry.id, logs, { copy: Boolean(options.copyOnDetach) });
+      if (shouldLink && canLink && !heldBy(resolvedGameDir, target)) {
+        linkFolder(resolvedGameDir, entry.id, target, logs);
+      } else if (shouldLink) {
+        moveModeFolder(
+          resolvedGameDir,
+          entry.id,
+          target,
+          { ...options, profileId: options.profileId },
+          logs
+        );
+      } else if (options.unlinkDisabled !== false || heldBy(resolvedGameDir, target)) {
+        unlinkFolder(resolvedGameDir, entry.id, logs, {
+          copy: Boolean(options.copyOnDetach),
+          target,
+        });
       }
     } catch (error) {
       errors.push(`${entry.id}: ${error.message || error}`);
@@ -390,13 +592,54 @@ function applyToGameDir(gameDir, options = {}) {
 function detachFolder(gameDir, id) {
   const logs = [];
   if (!gameDir) return logs;
-  unlinkFolder(path.resolve(gameDir), id, logs);
+  unlinkFolder(path.resolve(gameDir), id, logs, { target: getFolderTarget(id) });
+  return logs;
+}
+
+function returnBorrowed(gameDir) {
+  const logs = [];
+  const errors = [];
+  if (!gameDir) return { logs, errors };
+
+  const config = readConfig();
+
+  for (const entry of config.folders) {
+    const target = getFolderTarget(entry.id, config);
+
+    try {
+      if (heldBy(gameDir, target)) returnFolder(path.resolve(gameDir), entry.id, target, logs);
+    } catch (error) {
+      errors.push(`${entry.id}: ${error.message || error}`);
+    }
+  }
+
+  return { logs, errors };
+}
+
+function recoverLeases(isBusy = () => false) {
+  const config = readConfig();
+  const logs = [];
+
+  for (const entry of config.folders) {
+    const target = getFolderTarget(entry.id, config);
+    const lease = readLease(target);
+    if (!lease || isBusy(lease.profileId)) continue;
+
+    try {
+      returnFolder(lease.gameDir, entry.id, target, logs);
+    } catch (error) {
+      logs.push(`Could not return ${entry.id}: ${error.message || error}`);
+    }
+  }
+
   return logs;
 }
 
 function detachAll(gameDir) {
   const detached = [];
   if (!gameDir || !fs.existsSync(gameDir)) return detached;
+
+  returnBorrowed(gameDir);
 
   for (const name of fs.readdirSync(gameDir)) {
     const full = path.join(gameDir, name);
@@ -418,7 +661,12 @@ function isLinkedPath(gameDir, relativePath) {
 
   if (!first) return false;
 
-  return Boolean(lstatOrNull(path.join(gameDir, first))?.isSymbolicLink());
+  if (lstatOrNull(path.join(gameDir, first))?.isSymbolicLink()) return true;
+
+  const config = readConfig();
+  const entry = config.folders.find((item) => item.id.toLowerCase() === first.toLowerCase());
+
+  return Boolean(entry && heldBy(gameDir, getFolderTarget(entry.id, config)));
 }
 
 function describeFolder(entry, config) {
@@ -438,7 +686,16 @@ function describeFolder(entry, config) {
 function getState() {
   const config = readConfig();
 
+  let linksSupported = true;
+
+  try {
+    linksSupported = supportsLinks(path.dirname(getRoot(config)));
+  } catch {
+    linksSupported = true;
+  }
+
   return {
+    linksSupported,
     enabled: config.enabled,
     root: getRoot(config),
     defaultRoot: getDefaultRoot(),
@@ -584,5 +841,8 @@ module.exports = {
   applyToGameDir,
   detachFolder,
   detachAll,
+  returnBorrowed,
+  recoverLeases,
+  supportsLinks,
   isLinkedPath,
 };

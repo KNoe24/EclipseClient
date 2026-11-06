@@ -142,7 +142,14 @@ single folders to give that installation its own folder. You can copy the shared
 start empty.
 
 Each installation's folder is a link (a junction on Windows, no admin needed). Links are checked
-every time you press Start. Deleting an installation removes its links first, so shared worlds are
+every time you press Start.
+
+Drives that can't hold links (FAT32/exFAT, common on USB sticks) use move mode instead: the shared
+folder is moved into the installation when you press Start and moved back when the game closes
+(instant on the same drive). A lease file next to the shared folder records who has it; if the
+launcher crashes, the next start moves everything back. If two installations run at once, the
+second one uses its own folder for that session. The Shared Folders menu shows a yellow note when
+your drive uses move mode. Deleting an installation removes its links first, so shared worlds are
 never deleted, and the client updater's delete mode skips shared folders.
 
 ## 6. Mods from Modrinth
